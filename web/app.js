@@ -742,29 +742,43 @@ function chartFrame(title,unit,minimum,maximum,formatter=null) {
   svg.append(svgNode('text',{x:57,y:13,class:'axis-unit'},unit||''));return svg;
 }
 function weeklyChart(periods,key,assessment) {
-  const colors=window.IronCoachMetricStatus,unit={hours:'ore',activities:'attività',elevation_m:'m D+',load:'punti'}[key];
-  const ref=assessment.reference,values=periods.map(p=>p[key]).filter(v=>Number.isFinite(v));
-  const rawMax=Math.max(1,...values,ref||0),power=10**Math.floor(Math.log10(rawMax/4)),fraction=rawMax/4/power;
-  const step=(fraction<=1?1:fraction<=2?2:fraction<=2.5?2.5:fraction<=5?5:10)*power,max=Math.ceil(rawMax/step)*step;
+  const unit={hours:'ore',activities:'attività',elevation_m:'m D+',load:'punti'}[key],digits=key==='activities'?0:1;
+  const ref=Number.isFinite(assessment.reference)&&assessment.reference>=0?assessment.reference:null;
+  const values=periods.map(p=>p[key]).filter(Number.isFinite),rawMax=Math.max(1,...values,ref||0);
+  const power=10**Math.floor(Math.log10(rawMax/4)),fraction=rawMax/4/power;
+  const step=(fraction<=1?1:fraction<=2?2:fraction<=2.5?2.5:fraction<=5?5:10)*power,max=key==='activities'?Math.max(4,Math.ceil(rawMax/4)*4):Math.ceil(rawMax/step)*step;
+  const format=value=>Number.isFinite(value)?`${number(value,digits)} ${unit}`:'N/D';
+  const range=p=>`${dayLabel(p.start)} – ${dayLabel(p.end)}`;
+  const difference=value=>!Number.isFinite(value)||ref==null?'Confronto non disponibile':ref===0?`Riferimento ${format(ref)}`:`${value-ref>=0?'+':'−'}${number(Math.abs(value-ref),digits)} ${unit} (${value-ref>=0?'+':'−'}${number(Math.abs((value/ref-1)*100),0)}%) rispetto al riferimento`;
   const panel=el('figure',null,'chart-panel weekly-panel'),head=el('figcaption',null,'chart-panel-heading');
-  const current=periods.at(-1)?.[key];const main=el('div');main.append(el('p','ULTIMA SETTIMANA','chart-kicker'),el('strong',`${number(current,key==='activities'?0:1)} ${unit}`,'chart-kpi'));head.append(main);
-  const reference=el('div',null,'chart-comparison');reference.append(el('span','Riferimento personale'),el('strong',ref==null?'In costruzione':`${number(ref,1)} ${unit}`));head.append(reference);panel.append(head);
-  const svg=svgNode('svg',{viewBox:'0 0 680 300',role:'img',class:'performance-chart weekly-chart'});svg.append(svgNode('title',{},`Andamento ${unit}: `+periods.map(p=>`${p.start}: ${number(p[key],1)}`).join('; ')));
-  const left=48,right=662,top=22,bottom=242,plotHeight=bottom-top;
-  for(let value=0;value<=max+step/2;value+=step){const y=bottom-value/max*plotHeight;svg.append(svgNode('line',{x1:left,x2:right,y1:y,y2:y,stroke:'#e8eef2','stroke-width':1}));svg.append(svgNode('text',{x:left-12,y:y+4,'text-anchor':'end',class:'axis-label'},number(value,step%1?1:0)));}
-  if(Number.isFinite(ref)&&ref>0){const upper=Math.min(max,ref*1.1),lower=ref*.9;svg.append(svgNode('rect',{x:left,y:bottom-upper/max*plotHeight,width:right-left,height:(upper-lower)/max*plotHeight,fill:'#dcefe1',class:'reference-band'}));}
-  if(ref!=null){const y=bottom-ref/max*plotHeight;svg.append(svgNode('line',{x1:left,x2:right,y1:y,y2:y,stroke:'#8095a2','stroke-width':1.5,'stroke-dasharray':'5 5',class:'reference-line'}));}
-  const width=(right-left)/periods.length;
-  const tooltip=el('p','Seleziona una barra per il dettaglio.','chart-tooltip');tooltip.setAttribute('role','status');
-  periods.forEach((p,i)=>{const value=p[key],known=Number.isFinite(value),x=left+(i+.5)*width,verdict=colors.weekly(value,ref),height=known?Math.max(0,value)/max*plotHeight:0;
-    const group=svgNode('g',{tabindex:'0',role:'button','aria-label':`${dayLabel(p.start)}: ${number(value,1)} ${unit}. ${verdict.label}`,'data-period':p.start});
-    const bar=svgNode('rect',{x:x-27,y:bottom-height,width:54,height:height||(!known?0:2),rx:6,fill:colors.palette[verdict.tone],opacity:'1','data-value':known?value:'','data-tone':verdict.tone});group.append(bar);
-    let labelY=Math.max(15,bottom-height-12);const referenceY=ref==null?null:bottom-ref/max*plotHeight;if(referenceY!=null && Math.abs(labelY-referenceY)<13)labelY=Math.max(15,referenceY-16);
-    group.append(svgNode('text',{x,y:labelY,'text-anchor':'middle',class:'chart-value'},known?number(value,key==='activities'?0:1):'N/D'));
-    group.append(svgNode('text',{x,y:267,'text-anchor':'middle',class:'axis-label'},dayLabel(p.start).replace(/^.*? /,'')));
-    if(i===periods.length-1){group.append(svgNode('line',{x1:x-24,x2:x+24,y1:281,y2:281,stroke:'#173e50','stroke-width':3,'stroke-linecap':'round'}));group.append(svgNode('text',{x,y:298,'text-anchor':'middle',class:'chart-current'},'ATTUALE'));}
-    const describe=()=>{tooltip.textContent=`${dayLabel(p.start)} – ${dayLabel(p.end)} · ${number(value,1)} ${unit} · ${verdict.label}`;};group.addEventListener('mouseenter',describe);group.addEventListener('focus',describe);group.addEventListener('click',describe);group.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();describe();}});svg.append(group);
-  });panel.append(svg,tooltip);panel.append(el('p',Number.isFinite(ref)&&ref>0?'Fascia verde: confronto con il riferimento personale ±10%. È un confronto storico, non una prescrizione di carico.':'Servono settimane confrontabili per mostrare la fascia di riferimento.','chart-data-note'));return panel;
+  const latest=periods.at(-1),current=latest?.[key],main=el('div');
+  main.append(el('p','ULTIMA SETTIMANA','chart-kicker'),el('strong',format(current),'chart-kpi'));
+  if(latest)main.append(el('small',range(latest),'chart-period'));head.append(main);
+  const reference=el('div',null,'chart-comparison');reference.append(el('span','Riferimento personale'),el('strong',ref==null?'In costruzione':format(ref)));head.append(reference);panel.append(head);
+  panel.append(el('p',difference(current),'weekly-difference'));
+  const legend=el('div',null,'weekly-legend');legend.append(el('span','Volume registrato','weekly-series-key'));
+  if(ref!=null)legend.append(el('span','Riferimento personale','weekly-reference-key'));panel.append(legend);
+  const chart=el('div',null,'weekly-chart');chart.setAttribute('role','group');chart.setAttribute('aria-label',`Confronto settimanale · ${unit}`);
+  const tooltip=el('p','','chart-tooltip');tooltip.setAttribute('role','status');tooltip.setAttribute('aria-live','polite');
+  periods.forEach((p,i)=>{
+    const value=p[key],known=Number.isFinite(value),row=el('button',null,'weekly-row');row.type='button';row.dataset.period=p.start;
+    row.setAttribute('aria-label',`${range(p)}: ${format(value)}. ${difference(value)}`);
+    const date=el('span',null,'weekly-row-date');date.append(el('span',dayLabel(p.start)));
+    date.append(el('small',i===periods.length-1?'Attuale':`al ${dayLabel(p.end)}`));row.append(date);
+    if(i===periods.length-1)row.dataset.current='true';
+    const track=el('span',null,'weekly-track');track.setAttribute('aria-hidden','true');
+    const bar=el('span',null,'weekly-bar');bar.dataset.value=known?value:'';bar.style.width=`${known?Math.max(0,value)/max*100:0}%`;track.append(bar);
+    if(known&&value===0)track.classList.add('is-zero');
+    if(!known)track.classList.add('is-missing');
+    if(known&&ref!=null){const marker=el('span',null,'weekly-reference-marker');marker.style.left=`${ref/max*100}%`;track.append(marker);}row.append(track,el('strong',format(value),'weekly-row-value'));
+    const describe=()=>{tooltip.textContent=`${range(p)} · ${difference(value)}`;};
+    row.addEventListener('click',describe);row.addEventListener('focus',describe);
+    row.addEventListener('keydown',event=>{const rows=[...chart.querySelectorAll('.weekly-row')];if(['ArrowUp','ArrowDown','Home','End'].includes(event.key)){event.preventDefault();rows[event.key==='Home'?0:event.key==='End'?rows.length-1:Math.max(0,Math.min(rows.length-1,i+(event.key==='ArrowDown'?1:-1)))].focus();}});
+    chart.append(row);
+  });
+  const axis=el('div',null,'weekly-axis');axis.setAttribute('aria-hidden','true');
+  for(let i=0;i<=4;i++){const tick=el('span',number(max*i/4,key==='activities'?0:max<10?1:2));tick.style.left=`${i*25}%`;axis.append(tick);}chart.append(axis);panel.append(chart,tooltip);
+  panel.append(el('p',ref==null?'Il riferimento sarà disponibile con uno storico confrontabile. N/D indica un dato mancante, non zero.':'Il tratteggio indica il riferimento storico personale, non un obiettivo di carico. N/D indica un dato mancante, non zero.','chart-data-note'));return panel;
 }
 function sparkline(item,compact=false) {
   const points=(item.points||[]).filter(p=>p.value!=null&&Number.isFinite(p.value));
@@ -776,10 +790,9 @@ function sparkline(item,compact=false) {
   const positions=points.map(p=>[last===first?335:60+550*(Date.parse(p.date+'T12:00:00Z')-first)/(last-first),212-(p.value-minimum)/(maximum-minimum)*188]);
   const palette=window.IronCoachMetricStatus.palette;
   if(reference){const y=v=>212-(v-minimum)/(maximum-minimum)*188;const band=svgNode('rect',{x:57,y:y(reference.upper),width:563,height:y(reference.lower)-y(reference.upper),fill:'#d8efdc',class:'reference-band'});band.append(svgNode('title',{},`Fascia abituale personale: ${number(reference.lower,1)}–${number(reference.upper,1)} ${item.unit}. Descrive lo storico, non una zona ottimale.`));svg.append(band);for(const v of [reference.lower,reference.upper])svg.append(svgNode('line',{x1:57,x2:620,y1:y(v),y2:y(v),stroke:'#78a886','stroke-dasharray':'4 4'}));}
-  const area=svgNode('path',{d:`M ${positions[0][0]} 212 L ${positions.map(p=>p.join(' ')).join(' L ')} L ${positions.at(-1)[0]} 212 Z`,fill:'#dcecf1',opacity:reference?'0':'.35'});svg.append(area);
   points.forEach((p,i)=>{const status=window.IronCoachMetricStatus.metric({...item,points:points.slice(0,i+1),latest:p,baseline:null,reference_range:null,stale:false},(state.health?.metrics||[]).map(peer=>({...peer,latest:peer.points?.find(point=>point.date===p.date),stale:false}))),color=status.tone==='unknown'?palette.neutral:palette[status.tone]||palette.neutral;
-    if(i && Date.parse(p.date)-Date.parse(points[i-1].date)<=2*86400000) svg.append(svgNode('line',{x1:positions[i-1][0],y1:positions[i-1][1],x2:positions[i][0],y2:positions[i][1],stroke:color,'stroke-width':'3','stroke-linecap':'round'}));
-    const dot=svgNode('circle',{cx:positions[i][0],cy:positions[i][1],r:i===points.length-1?5:2.5,fill:color,stroke:'#fff','stroke-width':'1.5'});dot.append(svgNode('title',{},`${dayLabel(p.date)}: ${number(p.value,1)} ${item.unit}`));svg.append(dot);
+    if(i && Date.parse(p.date)-Date.parse(points[i-1].date)<=2*86400000) svg.append(svgNode('line',{x1:positions[i-1][0],y1:positions[i-1][1],x2:positions[i][0],y2:positions[i][1],stroke:'#2a6079','stroke-width':'2.2','stroke-linecap':'round'}));
+    const dot=svgNode('circle',{cx:positions[i][0],cy:positions[i][1],r:i===points.length-1?4.5:2.5,fill:i===points.length-1?color:'#2a6079',stroke:'#fff','stroke-width':'1.5'});dot.append(svgNode('title',{},`${dayLabel(p.date)}: ${number(p.value,1)} ${item.unit}`));svg.append(dot);
   });
   for(const i of [...new Set([0,Math.floor((points.length-1)/2),points.length-1])])svg.append(svgNode('text',{x:positions[i][0],y:239,'text-anchor':'middle',class:'axis-label'},dayLabel(points[i].date)));
   return svg;

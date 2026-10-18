@@ -186,7 +186,7 @@ test('all main detail dialogs place the back action before their title',async t=
 test('health chart shades only a supported personal range and labels it as descriptive',async t=>{
   const {w,$,flush}=await setup(t);const points=Array.from({length:10},(_,i)=>({date:plusDays('2026-10-07',i),value:48+i%4,source:'intervals'}));
   w.IronCoachUI.openHealthMetric({kind:'hrv_ms',label:'HRV',unit:'ms',points,latest:points.at(-1),stale:false});await flush();
-  assert.ok($('#metric-detail .reference-band'));assert.ok([...$('#metric-detail .performance-chart').querySelectorAll('line[stroke-width="3"]')].every(line=>line.getAttribute('stroke')!=='#ffffff'));assert.match($('#metric-detail .chart-data-note').textContent,/intervallo abituale.*non un obiettivo/);
+  assert.ok($('#metric-detail .reference-band'));const segments=[...$('#metric-detail .performance-chart').querySelectorAll('line[stroke-width="2.2"]')];assert.equal(segments.length,9);assert.ok(segments.every(line=>line.getAttribute('stroke')==='#2a6079'));assert.match($('#metric-detail .chart-data-note').textContent,/intervallo abituale.*non un obiettivo/);
   $('#close-metric').click();w.IronCoachUI.openHealthMetric({kind:'weight_kg',label:'Peso',unit:'kg',points:points.map(p=>({...p,value:65})),latest:{...points.at(-1),value:65},stale:false});
   assert.equal($('#metric-detail .reference-band'),null);assert.match($('#metric-detail .chart-data-note').textContent,/Nessuna fascia/);
 });
@@ -287,7 +287,7 @@ test('weekly cards sum recorded ascent and open judgment with prior comparable w
   assert.equal($('#home-week').children[3].dataset.tone,'good');
   assert.match($('#coach-flash').textContent,/Carico stabile/);assert.doesNotMatch($('#coach-flash').textContent,/Non valutabile/);
   $('#home-week').children[3].querySelector('button').click();await flush();
-  assert.match($('#metric-detail').textContent,/Mantieni il piano/);assert.match($('#metric-detail svg').textContent,/430/);assert.equal([...$('#metric-detail svg').querySelectorAll('rect')].at(-1).getAttribute('fill'),'#138a56');assert.doesNotMatch($('#metric-detail').textContent,/Sono confrontati gli stessi giorni/);
+  assert.match($('#metric-detail').textContent,/Mantieni il piano/);assert.match($('#metric-detail .weekly-chart').textContent,/430/);assert.equal($('#metric-detail .weekly-row[data-current] .weekly-bar').dataset.value,'391');assert.doesNotMatch($('#metric-detail').textContent,/Sono confrontati gli stessi giorni/);
   assert.doesNotMatch($('#metric-detail').textContent,/Intervals.icu/);
 });
 
@@ -770,14 +770,25 @@ test('Coach navigation offers a back arrow to the originating section',async t=>
 });
 
 
-test('weekly chart has one reference and equal fully saturated colors for equal values',async t=>{
+test('weekly comparison uses proportional zero-based rows, exact values and an explicit historical reference',async t=>{
  const {$,data,flush}=await setup(t);data.week={hours:8.3,activities:6,elevation_m:0,load:391};
  data.week_history=[{start:'2026-10-05',end:'2026-10-11',hours:8.3,activities:6,elevation_m:0,load:434},{start:'2026-09-28',end:'2026-10-04',hours:6.2,activities:4,elevation_m:0,load:300}];
  data.week_assessments={hours:{tone:'critical',judgment:'Volume alto',reference:5.4,explanation:'Aumento documentato.',actions:['Alleggerisci.']},load:{tone:'critical',judgment:'Carico alto',reference:260,explanation:'Aumento documentato.'}};
  $('#refresh').click();await flush();$('#home-week').children[0].querySelector('button').click();await flush();
- const bars=[...$('#metric-detail .weekly-chart').querySelectorAll('rect[data-value]')];assert.equal(bars.at(-1).getAttribute('fill'),bars.at(-2).getAttribute('fill'));assert.ok(bars.every(bar=>bar.getAttribute('opacity')==='1'));
- assert.equal($('#metric-detail .weekly-chart').querySelectorAll('.reference-line').length,1);assert.match($('#metric-detail .weekly-chart').textContent,/2,5/);assert.match($('#metric-detail .weekly-chart').textContent,/7,5/);assert.match($('#metric-detail .chart-comparison').textContent,/5,4 ore/);
- $('#close-metric').click();$('#home-week').children[3].querySelector('button').click();await flush();const loads=[...$('#metric-detail .weekly-chart').querySelectorAll('rect[data-value]')];assert.equal(loads.at(-1).getAttribute('fill'),loads.at(-2).getAttribute('fill'));
+ const bars=[...$('#metric-detail .weekly-chart').querySelectorAll('.weekly-bar')];assert.equal(bars.at(-1).style.width,bars.at(-2).style.width);assert.equal(bars.at(-1).style.width,'83%');assert.ok(bars.every(bar=>!bar.dataset.tone));
+ assert.equal($('#metric-detail .weekly-chart').querySelectorAll('.weekly-reference-marker').length,3);assert.match($('#metric-detail .weekly-axis').textContent,/2,5/);assert.match($('#metric-detail .weekly-axis').textContent,/7,5/);assert.match($('#metric-detail .chart-comparison').textContent,/5,4 ore/);
+ assert.match($('#metric-detail .weekly-difference').textContent,/\+2,9 ore.*\+54%/);assert.match($('#metric-detail .chart-data-note').textContent,/storico personale, non un obiettivo/);assert.equal($('#metric-detail .reference-band'),null);
+ $('#close-metric').click();$('#home-week').children[3].querySelector('button').click();await flush();const loads=[...$('#metric-detail .weekly-chart').querySelectorAll('.weekly-bar')];assert.ok(parseFloat(loads.at(-2).style.width)>parseFloat(loads.at(-1).style.width));assert.equal(loads.at(-1).dataset.value,'391');
+});
+
+test('weekly rows distinguish missing data from zero and support keyboard exploration without scaling text',async t=>{
+ const {w,$,data,flush}=await setup(t);data.week={hours:0,activities:0,elevation_m:null,load:0};
+ data.week_history=[{start:'2026-10-05',end:'2026-10-11',hours:null,activities:1,elevation_m:null,load:0}];
+ $('#refresh').click();await flush();$('#home-week').children[0].querySelector('button').click();await flush();
+ const rows=[...$('#metric-detail').querySelectorAll('.weekly-row')];assert.equal(rows.length,2);assert.match(rows[0].textContent,/N\/D/);assert.ok(rows[0].querySelector('.is-missing'));assert.ok(rows[1].querySelector('.is-zero'));assert.match(rows[1].textContent,/0 ore/);assert.equal($('#metric-detail .weekly-reference-marker'),null);
+ rows[0].focus();rows[0].dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));assert.equal(w.document.activeElement,rows[1]);assert.match($('#metric-detail .chart-tooltip').textContent,/Confronto non disponibile/);
+ rows[1].dispatchEvent(new w.KeyboardEvent('keydown',{key:'Home',bubbles:true}));assert.equal(w.document.activeElement,rows[0]);assert.equal($('#metric-detail .weekly-chart svg'),null);
+ $('#close-metric').click();$('#home-week').children[1].querySelector('button').click();await flush();assert.equal($('#metric-detail .weekly-axis').textContent,'01234');
 });
 
 test('health hides manual and context-only metrics and places range controls before plot',async t=>{
