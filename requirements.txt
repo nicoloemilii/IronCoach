@@ -1,0 +1,8 @@
+fastapi>=0.115,<1
+uvicorn>=0.30,<1
+SQLAlchemy>=2,<3
+PySide6>=6.8,<7
+fitparse>=1.2,<2
+requests>=2.31,<3
+garmin-fit-sdk>=21.218,<22
+tzdata>=2025.2

@@ -1,0 +1,19 @@
+name: IronmanCoach
+options:
+  bundleIdPrefix: it.ironmancoach
+  deploymentTarget:
+    iOS: '17.0'
+targets:
+  IronmanCoach:
+    type: application
+    platform: iOS
+    sources: [Sources]
+    settings:
+      base:
+        SWIFT_VERSION: '5.0'
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Ironman Coach
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: Collegamento al tuo server Ironman Coach sulla rete locale.
+        INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking: YES
+        TARGETED_DEVICE_FAMILY: '1,2'

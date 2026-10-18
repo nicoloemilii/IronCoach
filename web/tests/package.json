@@ -1,0 +1,9 @@
+{
+  "name": "ironman-coach-dom-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Synthetic DOM contract tests; no browser or backend access",
+  "scripts": { "test": "node --test --experimental-test-isolation=none app.test.cjs usability.test.cjs progress.test.cjs metric-status.test.cjs wellness.test.cjs" },
+  "engines": { "node": ">=22.13.0" },
+  "devDependencies": { "jsdom": "29.1.1" }
+}

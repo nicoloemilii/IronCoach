@@ -1,0 +1,198 @@
+from __future__ import annotations
+
+from collections import defaultdict
+from datetime import datetime, timedelta
+from typing import Iterable
+from app.services.athlete_clock import activity_day, athlete_today, as_utc_naive, utc_now_naive
+
+
+CYCLING_SPORTS = {
+    "bike", "cycling", "biking", "virtualride", "virtual_ride",
+    "indoorcycling", "indoor_cycling", "mountainbikeride", "mountain_bike", "gravelride",
+}
+RUNNING_SPORTS = {"run", "running", "trailrun", "trailrunning", "trail_run", "virtualrun"}
+SWIM_SPORTS = {"swim", "swimming", "openwaterswim", "open_water_swim"}
+STRENGTH_SPORTS = {"strength", "weighttraining", "weight_training"}
+
+
+def sport_key(sport: str | None) -> str:
+    value = (sport or "unknown").lower().strip()
+    if value in CYCLING_SPORTS:
+        return "bike"
+    if value in RUNNING_SPORTS:
+        return "run"
+    if value in SWIM_SPORTS:
+        return "swim"
+    if value in STRENGTH_SPORTS:
+        return "strength"
+    return value or "unknown"
+
+
+def cycling_tss(duration_seconds: float | None, normalized_power: float | None, ftp_watts: float) -> float:
+    if not duration_seconds or not normalized_power or ftp_watts <= 0:
+        return 0.0
+    duration_hours = float(duration_seconds) / 3600.0
+    intensity_factor = float(normalized_power) / float(ftp_watts)
+    return round(100.0 * duration_hours * intensity_factor**2, 1)
+
+
+def activity_load(activity, ftp_watts: float) -> float:
+    """Return the load used by the analysis layer.
+
+    Cycling activities with NP use the athlete FTP to calculate cycling TSS.
+    Every other sport uses the sport-specific load already analyzed by
+    Intervals.icu. If cycling has no NP, its stored Intervals.icu load is used.
+    No synthetic cross-sport multipliers are applied.
+    """
+    # Intervals analyzed load is authoritative, including an explicit zero.
+    remote_cleared = False
+    if getattr(activity, 'id', None) is not None:
+        from sqlalchemy.orm import object_session
+        from sqlalchemy.orm.exc import UnmappedInstanceError
+        from app.db.iron_models import ActivityObservation
+        import json
+        try: db = object_session(activity)
+        except UnmappedInstanceError: db = None
+        if db:
+            observation = db.query(ActivityObservation).filter(ActivityObservation.activity_id == activity.id, ActivityObservation.source_key.like('intervals:%')).first()
+            if observation:
+                known = json.loads(observation.payload_json).get('load')
+                if known is not None: return round(max(0, float(known)), 1)
+                remote_cleared = True
+    if not remote_cleared and getattr(activity, 'source', None) == 'intervals' and getattr(activity, 'load', None) is not None:
+        return round(max(0, float(activity.load)), 1)
+    sport = (activity.sport or "").lower()
+    if sport in CYCLING_SPORTS:
+        calculated = cycling_tss(activity.duration_seconds, activity.normalized_power, ftp_watts)
+        if calculated > 0:
+            return calculated
+
+    stored = None if remote_cleared else getattr(activity, "load", None)
+    try:
+        value = float(stored)
+    except (TypeError, ValueError):
+        return 0.0
+    return round(value, 1) if value >= 0 else 0.0
+
+
+def _valid_activity(activity) -> bool:
+    """Exclude obvious malformed zero/near-zero sessions from fitness load."""
+    if not activity.start_time:
+        return False
+    try:
+        duration = float(activity.duration_seconds or 0)
+    except (TypeError, ValueError):
+        duration = 0
+    # A 38-second open-water activity with no distance/load is a data-quality
+    # artifact for training analysis, not a meaningful workout.
+    if duration < 60 and not (activity.load and float(activity.load) > 0):
+        return False
+    return True
+
+
+def daily_loads(activities: Iterable, ftp_watts: float, end_date=None):
+    now = utc_now_naive()
+    end_date = end_date or athlete_today(now)
+    by_day = defaultdict(float)
+    for activity in activities:
+        if not _valid_activity(activity) or as_utc_naive(activity.start_time) > now:
+            continue
+        day = activity_day(activity.start_time)
+        if day > end_date:
+            continue
+        by_day[day] += activity_load(activity, ftp_watts)
+    if not by_day:
+        return []
+    first = min(by_day)
+    result = []
+    day = first
+    while day <= end_date:
+        result.append((day, round(by_day.get(day, 0.0), 1)))
+        day += timedelta(days=1)
+    return result
+
+
+def daily_loads_by_sport(activities: Iterable, ftp_watts: float, end_date=None):
+    now = utc_now_naive()
+    end_date = end_date or athlete_today(now)
+    by_day = defaultdict(lambda: defaultdict(float))
+    first_date = None
+    for activity in activities:
+        if not _valid_activity(activity) or as_utc_naive(activity.start_time) > now:
+            continue
+        day = activity_day(activity.start_time)
+        if day > end_date:
+            continue
+        first_date = day if first_date is None or day < first_date else first_date
+        by_day[day][sport_key(activity.sport)] += activity_load(activity, ftp_watts)
+    if first_date is None:
+        return []
+
+    result = []
+    day = first_date
+    while day <= end_date:
+        result.append((day, {sport: round(value, 1) for sport, value in by_day.get(day, {}).items()}))
+        day += timedelta(days=1)
+    return result
+
+
+def _ema(series, time_constant_days: int):
+    value = 0.0
+    k = 1.0 / float(time_constant_days)
+    for _, load in series:
+        value += (load - value) * k
+    return value
+
+
+def fitness_metrics(activities, ftp_watts: float, end_date=None, ctl_days: int = 42, atl_days: int = 7):
+    series = daily_loads(activities, ftp_watts, end_date=end_date)
+    if not series:
+        return {"ctl": 0.0, "atl": 0.0, "tsb": 0.0, "days": 0}
+    ctl = _ema(series, ctl_days)
+    atl = _ema(series, atl_days)
+    return {
+        "ctl": round(ctl, 1),
+        "atl": round(atl, 1),
+        "tsb": round(ctl - atl, 1),
+        "days": len(series),
+        "ctl_time_constant_days": ctl_days,
+        "atl_time_constant_days": atl_days,
+    }
+
+
+def fitness_metrics_by_sport(activities, ftp_watts: float, end_date=None, ctl_days: int = 42, atl_days: int = 7):
+    daily = daily_loads_by_sport(activities, ftp_watts, end_date=end_date)
+    if not daily:
+        return {}
+
+    sports = sorted({sport for _, loads in daily for sport in loads})
+    output = {}
+    for sport in sports:
+        series = [(day, loads.get(sport, 0.0)) for day, loads in daily]
+        ctl = _ema(series, ctl_days)
+        atl = _ema(series, atl_days)
+        output[sport] = {
+            "ctl": round(ctl, 1),
+            "atl": round(atl, 1),
+            "tsb": round(ctl - atl, 1),
+        }
+    return output
+
+
+def data_quality(activities, ftp_watts: float):
+    issues = []
+    for activity in activities:
+        duration = float(activity.duration_seconds or 0)
+        distance = float(activity.distance_meters or 0)
+        load = activity_load(activity, ftp_watts)
+        if duration < 60 and load == 0:
+            issues.append({
+                "id": activity.id,
+                "sport": activity.sport,
+                "name": activity.name,
+                "start_time": activity.start_time,
+                "reason": "session_under_60s_without_load",
+                "duration_seconds": round(duration, 1),
+                "distance_meters": round(distance, 1),
+            })
+    return {"issues": issues, "count": len(issues)}
