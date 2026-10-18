@@ -138,7 +138,7 @@ def get_settings(db: Session) -> dict:
     return {"profile": load_settings(db), "revision": row.revision if row else 0}
 
 
-def save_settings(db: Session, payload: PlanningProfile | dict, expected_revision: int | None = None) -> dict:
+def save_settings(db: Session, payload: PlanningProfile | dict, expected_revision: int | None = None, *, commit=True) -> dict:
     profile = payload if isinstance(payload, PlanningProfile) else PlanningProfile.model_validate(payload)
     if expected_revision is not None and (isinstance(expected_revision, bool) or not isinstance(expected_revision, int)
                                           or not 0 <= expected_revision <= 9223372036854775807):
@@ -168,7 +168,10 @@ def save_settings(db: Session, payload: PlanningProfile | dict, expected_revisio
         current = db.execute(select(AthleteSettings.revision).where(AthleteSettings.id == 1)).scalar_one_or_none()
         raise HTTPException(412, {"message": "Il profilo è stato modificato in un’altra finestra. Ricarica i dati aggiornati prima di salvare.",
                                   "current_revision": current if current is not None else 0})
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     return {"profile": content, "revision": revision}
 
 
@@ -481,6 +484,8 @@ def _schedule_brick(db, profile, capacity, created, occupied, start, version):
     runs = sorted((w for w in created if w.sport == "running"), key=lambda w: w.duration_min)
     for bike in bikes:
         for run in runs:
+            if not set(windows(profile,bike.date,'cycling')['allowed']) & set(windows(profile,bike.date,'running')['allowed']):
+                continue
             run_minutes = min(20, int(run.duration_min))
             other_minutes = sum(w.duration_min for w in created if w.date == bike.date and w.id != run.id)
             if occupied[bike.date] + other_minutes + run_minutes + 5 > profile["availability"][date.fromisoformat(bike.date).weekday()]:
@@ -535,7 +540,7 @@ def get_week(db: Session, value=None) -> dict:
         sessions = [serialize_workout(row) for row in rows if row.date == day]
         for session in sessions:
             if session['status'] == 'planned' and day >= _today().isoformat():
-                window = windows(profile, day)
+                window = windows(profile, day, session['sport'])
                 if window['restricted']:
                     session['payload']['time_window'] = window
         sessions.sort(key=lambda row: (row["payload"].get("brick", {}).get("group_id", ""), row["payload"].get("brick", {}).get("sequence", 0), row["id"]))
@@ -589,6 +594,8 @@ def generate_week(db: Session, value=None, regenerate=False) -> dict:
     db.flush()
     retained = _rows(db, start)
     occupied = _occupancy(db, start, retained)
+    from app.services.time_constraints import manual_pause_reservations
+    occupied.update(manual_pause_reservations(db,start,profile))
     remaining = max(0, min(profile["weekly_minutes"], capacity["limit"], sum(profile["availability"])) - sum(occupied.values()))
     excluded = set(profile["excluded_sports"])
     if not profile["pool_access"]:
@@ -648,13 +655,23 @@ def generate_week(db: Session, value=None, regenerate=False) -> dict:
         duration = int(duration // 5 * 5)
         if duration < 15:
             continue
+        reserved_duration = duration
+        session_date = start + timedelta(days=index)
+        sport_spare = available_minutes(profile, session_date, sport) - occupied[session_date.isoformat()] - allocated[index]
+        duration = int(min(duration, max(0, sport_spare)) // 5 * 5)
+        if duration < 15:
+            # A paused sport's allocation is left unused instead of increasing
+            # the other disciplines to compensate for the pause.
+            remaining -= reserved_duration
+            allocated[index] += reserved_duration
+            continue
         priority = "key" if sport == "cycling" and position == 0 else "support"
         payload = _make_workout(profile, sport, duration, priority, capacity["phase"], next_version, start)
         row = Workout(date=(start + timedelta(days=index)).isoformat(), sport=sport, name=payload["name"], duration_min=duration, payload_json=_dump(payload), status="planned")
         db.add(row)
         created.append(row)
-        remaining -= duration
-        allocated[index] += duration
+        remaining -= reserved_duration
+        allocated[index] += reserved_duration
     db.flush()
     brick = _schedule_brick(db, profile, capacity, created, occupied, start, next_version)
     if not any(row.sport == "strength" for row in created):
@@ -666,6 +683,8 @@ def generate_week(db: Session, value=None, regenerate=False) -> dict:
     rationale.append(strength_reason)
     rationale.append(brick["reason"])
     rationale.append("Adattamento prudente: lavoro aerobico e tecnico, nessuna progressione intensa automatica o recupero forzato delle sedute saltate.")
+    if any(rule.get('sports') and rule['start'] <= (start + timedelta(days=6)).isoformat() and rule['end'] >= start.isoformat() for rule in profile.get('time_constraints', [])):
+        rationale.append('Pause temporanee delle discipline rispettate: il tempo della disciplina sospesa non viene trasferito automaticamente alle altre.')
     if profile.get("target_time"):
         rationale.append("Il tempo gara desiderato è un obiettivo dichiarato: non aumenta da solo volume o intensità e non costituisce una previsione di risultato.")
     if not profile["pool_access"]:
@@ -726,7 +745,7 @@ def _prepare_workout_change(db: Session, workout_id: int, action: str, new_date:
         group_ids = {row.id, linked.id} if linked else {row.id}
         other = _occupancy(db, start, [r for r in _rows(db, start) if r.id not in group_ids])[new_date.isoformat()]
         required = row.duration_min + (linked.duration_min + 5 if linked else 0)
-        if other + required > available_minutes(profile, new_date):
+        if other + required > available_minutes(profile, new_date, row.sport) or (linked and other + required > available_minutes(profile, new_date, linked.sport)):
             raise HTTPException(409, "Il giorno scelto non ha abbastanza minuti disponibili.")
         revised_row['date'] = new_date.isoformat()
         if linked:

@@ -99,9 +99,9 @@ def create_manual(db, payload: ManualWorkoutInput):
         warnings.append('Nel profilo non risulta accesso alla piscina: verifica dove svolgere il nuoto.')
     occupancy = _occupancy(db, start, rows)
     from app.services.time_constraints import available_minutes, windows
-    available = available_minutes(settings, payload.date)
-    if windows(settings, payload.date)['conflict']:
-        warnings.append('Il giorno è bloccato nelle disponibilità temporanee: scegli una data compatibile prima di eseguire la seduta.')
+    available = available_minutes(settings, payload.date, payload.sport)
+    if windows(settings, payload.date, payload.sport)['conflict']:
+        warnings.append('Il giorno o questa disciplina sono in pausa nelle disponibilità temporanee: scegli una data compatibile prima di eseguire la seduta.')
     if occupancy[str(payload.date)] + payload.duration_min > available:
         warnings.append(f'Il totale del giorno supera i {available} minuti di disponibilità indicati nel profilo.')
     if sum(occupancy.values()) + payload.duration_min > settings['weekly_minutes']:

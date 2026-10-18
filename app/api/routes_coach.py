@@ -46,7 +46,8 @@ def get_coach_today(ftp_watts: float | None = None, db: Session = Depends(get_db
     base = coach_today(activities, ftp_watts=ftp, profile_override=profile)
     base['profile'] = profile
     base['race_goal'] = race_goal; base['goal_warnings'] = goal_warnings
-    allowed = [sport for sport in ('cycling', 'running', 'swimming') if sport not in settings['excluded_sports']
+    from app.services.time_constraints import windows
+    allowed = [sport for sport in ('cycling', 'running', 'swimming') if sport not in settings['excluded_sports'] and windows(settings,str(base['date']),sport)['allowed']
                and (sport != 'swimming' or settings['pool_access'])
                and (not race_goal or sport in race_goal['disciplines'])]
     base['allowed_sports'] = allowed
@@ -99,7 +100,7 @@ def get_coach_today(ftp_watts: float | None = None, db: Session = Depends(get_db
         base['workout'] = {'sport': 'recovery', 'name': 'Recupero e rivalutazione', 'duration_min': 0,
                            'reason': 'Il check-in richiede una rivalutazione prima di programmare una nuova seduta.', 'steps': [], 'expected_rpe': 0}
         if not allowed:
-            base['workout']['reason'] = 'Nessuna disciplina disponibile per la proposta giornaliera: verifica esclusioni, piscina e obiettivo. Le sedute di forza restano gestibili dal calendario.'
+            base['workout']['reason'] = 'Nessuna disciplina disponibile per la proposta giornaliera: verifica esclusioni, pause temporanee, piscina e obiettivo. Le sedute di forza restano gestibili dal calendario.'
             base['reason'] = base['workout']['reason']
     elif race_goal and base['workout'].get('sport') in race_goal['disciplines']:
         from app.services.goal_planning import focus_for_sport
@@ -167,7 +168,7 @@ def create_workout(payload: dict | None = None, db: Session = Depends(get_db)):
     ftp = float(today['profile'].get('cycling', {}).get('ftp_watts') or today['profile'].get('ftp_watts') or 170)
     requested = sport if sport in ('cycling', 'running', 'swimming') else None
     if requested and requested not in today['allowed_sports']:
-        raise HTTPException(409, 'La disciplina non è disponibile nel profilo o nell’obiettivo collegato. Aggiorna le impostazioni prima di salvarla.')
+        raise HTTPException(409, 'La disciplina non è disponibile nel profilo, nell’obiettivo o nelle pause temporanee. Aggiorna le preferenze prima di salvarla.')
     if requested is None and today['decision']['sport'] in today['allowed_sports']:
         requested = today['decision']['sport']
     decision = decide_training(today['athlete_state'], phase=today['event']['phase'], requested_sport=requested)

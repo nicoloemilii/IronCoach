@@ -501,3 +501,11 @@ La palestra aggiunge basi e catalogo, riordino e riutilizzo con nuovo progresso 
 `PlanningProfile` aggiunge `height_cm`, `birth_date` e `sex` facoltativi e validati. `body_metrics.body_mass_index` combina altezza confermata e peso osservato, mantenendo fonte/data, età alla pesata e dati mancanti. Non usa valori predefiniti legacy. I riferimenti CDC per adulti da 20 anni non dipendono da sesso o età; percentili pediatrici non implementati, nessuna categoria adulta per minori di 20 anni. Home e profilo derivato espongono `body_mass`, senza modificare il Coach del carico.
 
 Verifica aggiornata: 540 test backend, 132 frontend, 59 richieste integrate isolate senza errori. Specifica e fonti in `docs/IMC_2026_10_18.md`.
+
+## Pause temporanee delle discipline
+
+`time_constraints.TimeConstraint.sports` delimita una regola a nuoto, bici, corsa o palestra. `coach_dates` risolve espressioni temporali italiane, con estremi inclusivi e assunzioni mostrate. `CoachRequest.interpret_dates` è attivo per impostazione predefinita; disattivandolo restano autorevoli i campi Dal/Al.
+
+L’applicazione salva profilo e rimozione dal piano attivo delle sedute interessate in una transazione. La firma include stato e payload delle sedute; revisione, inizio/conferme e consegne remote vengono ricontrollati. `coach_pause` conserva l’attribuzione della rimozione. La generazione riserva il budget omesso delle sedute manuali senza conteggiarlo come lavoro e rispetta la disponibilità per sport. La proposta giornaliera e gli spostamenti usano le stesse regole.
+
+Verifica aggiornata: 580 test backend, 134 frontend, 66 richieste integrate isolate senza errori. Semantica di gennaio, rimozione/ripresa e limiti in `docs/COACH_PAUSE_DISCIPLINE_2026_10_18.md`.

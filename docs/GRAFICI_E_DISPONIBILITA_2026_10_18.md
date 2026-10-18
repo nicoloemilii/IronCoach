@@ -19,7 +19,7 @@ Per HRV, sonno e frequenza a riposo la fascia verde è l’intervallo abituale p
 
 ## Coach nel piano
 
-Il Coach interpreta localmente richieste di disponibilità e pause, non è una chat generativa. Esempi supportati: «Niente mattina», «Solo pomeriggio», «Non allenarmi lunedì e mercoledì sera», «Pausa dagli allenamenti». Il periodo applicato è quello nei campi Dal/Al; richieste ambigue o non supportate vengono respinte senza salvataggi.
+Il Coach interpreta localmente richieste di disponibilità e pause, non è una chat generativa. Esempi supportati: «Niente mattina», «Solo pomeriggio», «Non allenarmi lunedì e mercoledì sera», «Pausa dagli allenamenti». La successiva revisione aggiunge pause di disciplina e periodi nel testo, come «non voglio fare nuoto fino a gennaio»; Dal/Al restano il riferimento senza un periodo nel testo o con lettura automatica disattivata. Richieste ambigue o non supportate vengono respinte senza salvataggi. Dettagli in `docs/COACH_PAUSE_DISCIPLINE_2026_10_18.md`.
 
 `POST /planning/coach/preview` mostra giorni, fasce e sedute interessate, senza scritture. `POST /planning/coach/apply` ricontrolla la firma dell’anteprima e la revisione del profilo. Modifiche concorrenti richiedono una nuova anteprima. Le regole persistono nel profilo, sono rimovibili e rientrano nel backup esistente.
 
