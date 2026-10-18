@@ -7,7 +7,7 @@ if not exist .venv-web\Scripts\python.exe (
   python -m venv .venv-web
   if errorlevel 1 goto fail
 )
-.venv-web\Scripts\python.exe -c "import fastapi, uvicorn, sqlalchemy, requests, garmin_fit_sdk; from zoneinfo import ZoneInfo; ZoneInfo('Europe/Rome')" >nul 2>&1
+.venv-web\Scripts\python.exe -c "import fastapi, uvicorn, sqlalchemy, requests, garmin_fit_sdk, pwdlib, cryptography, stripe; from zoneinfo import ZoneInfo; ZoneInfo('Europe/Rome')" >nul 2>&1
 if errorlevel 1 (
   echo Preparazione delle dipendenze web...
   .venv-web\Scripts\python.exe -m pip install -r requirements-web.txt

@@ -1,6 +1,12 @@
-# Ironman Coach — web e desktop
+# Iron Coach 2.0 — beta web commerciale
 
-Applicazione desktop Windows per coaching multisport.
+Applicazione web per coaching multisport, con calendario, storico, recupero, integrazioni e schede palestra con 201 esercizi. La versione personale Windows resta disponibile.
+
+La modalità **hosted** aggiunge account separati, registrazione su invito o con conferma email, password Argon2id, sessioni revocabili, protezione CSRF, archivi distinti per atleta, credenziali cifrate, esportazione dei dati e richieste di cancellazione. Stripe Checkout e portale di fatturazione usano un prezzo del server e webhook firmati; il semplice ritorno dal pagamento non abilita il prodotto.
+
+Sono inclusi Docker/Caddy, configurazione di esempio, dipendenze bloccate, CI, backup operativo cifrato e ripristino in una cartella nuova. **Non è stata attivata una vendita pubblica**: dominio, hosting, pagamenti, email e documenti del titolare richiedono configurazione e collaudo reali. [Avvio, operazioni e limiti della beta](docs/COMMERCIAL_BETA.md). Desktop/iOS conservano lo stato precedente; non sono il canale commerciale di questa beta.
+
+Verifica della revisione: 617 test backend, 144 frontend e prova integrata hosted con due account e 56 richieste. Layout nel browser e distribuzione Docker non verificati su questa macchina; i servizi esterni sono simulati nei test.
 
 ## Interfaccia web
 
@@ -20,7 +26,7 @@ Gli allenamenti bici/corsa sono esportabili come veri file FIT, verificati rileg
 
 Le API e il motore rimangono riutilizzabili dal client SwiftUI in `ios`. Il passaggio a iPhone richiederà comunque build, integrazioni native e verifica con Xcode.
 
-Non esporre il backend su Internet: al momento è personale, senza autenticazione. Il frontend web protegge i salvataggi del profilo tramite revisione: una bozza precedente viene conservata e segnala il conflitto. I client desktop o precedenti che non inviano la revisione restano compatibili e possono sovrascrivere il profilo; evitare modifiche simultanee da quei client.
+La modalità `local` è personale, senza login e limitata al loopback e ai nomi localhost/127.0.0.1. Per ospitare clienti usa esclusivamente `IRON_MODE=hosted`, HTTPS e la configurazione descritta nella guida commerciale. Il profilo usa revisioni per proteggere le bozze; i vecchi client desktop che non inviano la revisione restano compatibili soltanto con l’installazione personale e possono sovrascrivere il profilo.
 
 Calendario e check-in usano Europe/Rome; i timestamp delle attività restano UTC nel database. Per le vecchie attività importate con fuso non noto serve una verifica della provenienza prima di correggerle. Le nuove importazioni JSON richiedono esplicitamente l'offset.
 

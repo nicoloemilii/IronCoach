@@ -29,6 +29,8 @@ def fingerprint(key):
 
 
 def local_only(request: Request):
+    if getattr(request.state,'account',None):
+        return  # Hosted identity and CSRF were checked at the ASGI boundary.
     try:
         local = ipaddress.ip_address(request.client.host).is_loopback
     except (ValueError, AttributeError):

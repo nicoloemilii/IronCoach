@@ -6,6 +6,8 @@ import re
 import time
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
+from app.db.database import WORKSPACE
 from threading import Lock
 from types import SimpleNamespace
 
@@ -67,7 +69,7 @@ def _cached_remote(remote_id):
     if not key:
         return {}, [], None, 'Collega Intervals.icu per caricare percorso e registrazioni complete.', False
     fingerprint = hashlib.sha256((str(configuration.get('athlete_id')) + '\0' + key).encode()).hexdigest()
-    cache_key = (fingerprint, remote_id)
+    cache_key = (WORKSPACE.get(), fingerprint, remote_id)
     with _CACHE_LOCK:
         cached = _CACHE.get(cache_key)
         if cached and cached[0] > time.monotonic():
@@ -75,8 +77,8 @@ def _cached_remote(remote_id):
             return cached[1]
     summary = {}; streams = []; route = None; messages = []
     with ThreadPoolExecutor(max_workers=2) as executor:
-        summary_job = executor.submit(intervals.get_activity_remote, remote_id)
-        streams_job = executor.submit(intervals.get_activity_remote, remote_id, '/streams.json',
+        summary_job = executor.submit(copy_context().run, intervals.get_activity_remote, remote_id)
+        streams_job = executor.submit(copy_context().run, intervals.get_activity_remote, remote_id, '/streams.json',
                                       {'types': 'time,watts,heartrate,cadence,velocity_smooth,altitude,distance,temp,latlng'})
         for job, kind in ((summary_job, 'summary'), (streams_job, 'streams')):
             try:

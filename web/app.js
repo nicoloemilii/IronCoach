@@ -6,7 +6,7 @@ const state = { today: null, home: null, health: null, healthRange: '', coach: n
 const sports = { cycling: 'Bici', running: 'Corsa', swimming: 'Nuoto', bike: 'Bici', run: 'Corsa', swim: 'Nuoto', strength: 'Forza' };
 const statuses = { planned: 'Pianificata', completed: 'Completata', skipped: 'Saltata', cancelled: 'Sostituita', superseded: 'Sostituita' };
 const stepNames = { warmup: 'Riscaldamento', cooldown: 'Defaticamento', endurance: 'Resistenza', easy: 'Facile', interval: 'Ripetuta', recovery: 'Recupero', aerobic: 'Aerobico', tempo: 'Ritmo sostenuto', technique: 'Tecnica e controllo', strength: 'Forza' };
-const titles = { today: 'Il tuo allenamento, in chiaro.', health: 'Ascolta il tuo recupero.', coach: 'Il giudizio richiede evidenze.', calendar: 'Obiettivo e piano.', training: 'Allenati con una direzione.', activities: 'Ogni passo conta.', athlete: 'Il punto di partenza sei tu.', goal: 'Dai forma ai tuoi obiettivi.', connections: 'Connetti il tuo percorso.' };
+const titles = { today: 'Il tuo allenamento, in chiaro.', health: 'Ascolta il tuo recupero.', coach: 'Il giudizio richiede evidenze.', calendar: 'Obiettivo e piano.', training: 'Allenati con una direzione.', activities: 'Ogni passo conta.', athlete: 'Il punto di partenza sei tu.', goal: 'Dai forma ai tuoi obiettivi.', connections: 'Connetti il tuo percorso.', account: 'Il tuo spazio personale.' };
 const number = (value, digits = 0) => value == null || !Number.isFinite(Number(value)) ? '—' : Number(value).toLocaleString('it-IT', { maximumFractionDigits: digits });
 const scaled = (value, divisor) => value == null ? null : value / divisor;
 function dateString(date) { return date.toISOString().slice(0, 10); }
@@ -54,7 +54,7 @@ async function saveProfile(payload, revision) {
   state.settings = result.profile; state.settingsRevision = result.revision; return result;
 }
 function showActionError(error) {
-  const message = error.name === 'AbortError' ? 'Il server non risponde. Riprova tra poco.' : error instanceof TypeError ? 'Connessione al server locale non disponibile. Verifica che Iron Coach sia avviato e riprova.' : error.message;
+  const message = error.name === 'AbortError' ? 'Il server non risponde. Riprova tra poco.' : error instanceof TypeError ? 'Connessione a Iron Coach non disponibile. Verifica la rete e riprova.' : error.message;
   notice(message, true);
   if ([409, 412].includes(error.status) && error.path === '/planning/profile') {
     $('#notice').append(el('p', 'Le tue modifiche restano nel modulo. Puoi copiarle oppure ricaricare i valori salvati nell’altra finestra.'));
@@ -539,7 +539,7 @@ function addIntervalsConnection() {
   const card = el('article', null, 'card connection-note'); card.id = 'intervals-connection';
   card.append(el('p', 'LE TUE ATTIVITÀ, SEMPRE NEL PIANO', 'eyebrow'), el('h2', 'Collega Intervals.icu'));
   const status = el('div', 'Caricamento stato…'); status.id = 'intervals-status'; status.setAttribute('role', 'status'); card.append(status);
-  const guide = el('p', 'Genera una chiave personale in Intervals.icu → Settings → Developer Settings. La chiave viene inviata al server locale, verificata con Intervals.icu e salvata protetta per il tuo utente Windows.');
+  const guide = el('p', 'Genera una chiave personale in Intervals.icu → Settings → Developer Settings. La chiave viene verificata con Intervals.icu e conservata protetta nell’installazione che stai usando. Non viene mostrata nelle risposte dell’app.');
   const link = el('a', 'Apri le impostazioni Intervals.icu ↗'); link.href = 'https://intervals.icu/settings'; link.target = '_blank'; link.rel = 'noopener noreferrer'; guide.append(' ', link); card.append(guide);
   const form = el('form'); form.id = 'intervals-form';
   const keyLabel = el('label', 'Chiave API personale'); const key = el('input'); key.name = 'api_key'; key.type = 'password'; key.autocomplete = 'new-password'; key.required = true; key.maxLength = 512; key.placeholder = 'Non sarà mostrata dopo il salvataggio'; keyLabel.append(key);

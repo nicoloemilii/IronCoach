@@ -27,22 +27,27 @@ from app.api.routes_training import router as training_router
 from app.db.training_models import ensure_training_schema
 from app.db.migrations import migrate
 from app.services import sync_jobs
+from app.commercial.config import from_env
 
-migrate(engine)
-ensure_health_reports_schema(engine)
-ensure_training_schema(engine)
+SETTINGS = from_env()
+
+if not SETTINGS.hosted:
+    migrate(engine)
+    ensure_health_reports_schema(engine)
+    ensure_training_schema(engine)
 
 
 @asynccontextmanager
 async def lifespan(app):
-    sync_jobs.start()
+    if SETTINGS.hosted:sync_jobs.start_hosted(app.state.accounts)
+    else:sync_jobs.start()
     yield
     sync_jobs.stop()
 
 app = FastAPI(
     title="Ironman Coach",
     description="Adaptive coaching engine locale per la preparazione Ironman",
-    version="1.3.0",
+    version="2.0.0-beta.1",
     lifespan=lifespan,
 )
 
@@ -100,8 +105,12 @@ def web_app():
 def home(request: Request):
     if 'text/html' in request.headers.get('accept', ''):
         return RedirectResponse('/app', status_code=307)
-    return {"app": "Ironman Coach", "status": "online", "version": "1.3.0"}
+    return {"app": "Ironman Coach", "status": "online", "version": app.version}
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "database": "connected"}
+    return {"status": "ok"}
+
+
+from app.commercial.setup import install
+install(app, SETTINGS)

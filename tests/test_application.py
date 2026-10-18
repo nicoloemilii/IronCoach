@@ -27,7 +27,7 @@ def client(monkeypatch):
         with Session(engine) as session:
             yield session
     module.app.dependency_overrides[database.get_db] = db
-    yield TestClient(module.app)
+    yield TestClient(module.app,base_url='http://127.0.0.1',client=('127.0.0.1',51000))
     module.app.dependency_overrides.clear()
     engine.dispose()
 

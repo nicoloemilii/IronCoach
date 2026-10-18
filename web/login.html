@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="it">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101f26"><title>Accedi · Iron Coach</title><link rel="stylesheet" href="/web/style.css"><script src="/web/account.js" defer></script></head>
+<body class="auth-page">
+  <main class="auth-shell">
+    <a href="/app" class="auth-brand">ic <span>IRON COACH</span></a>
+    <div class="auth-intro"><p class="eyebrow">IL TUO PERCORSO, IN UN SOLO POSTO</p><h1>Allenati con una direzione.</h1><p>Piano multisport, diario delle attività, recupero e schede palestra. I tuoi dati restano nel tuo account.</p></div>
+    <section class="auth-card" aria-label="Accesso a Iron Coach">
+      <div class="auth-tabs" role="group" aria-label="Scegli operazione"><button type="button" data-auth-tab="login" aria-pressed="true">Accedi</button><button type="button" data-auth-tab="register" aria-pressed="false">Crea account</button><button type="button" data-auth-tab="forgot" aria-pressed="false">Recupera accesso</button></div>
+      <p id="auth-status" role="status" aria-live="polite"></p>
+      <form id="auth-login"><h2>Bentornato.</h2><label>Email<input name="email" type="email" autocomplete="username" maxlength="254" required></label><label>Password<input name="password" type="password" autocomplete="current-password" minlength="12" maxlength="128" required></label><button class="primary" type="submit">Accedi</button><button type="button" id="auth-resend" class="text-button">Invia di nuovo la conferma email</button></form>
+      <form id="auth-register" hidden><h2>Il tuo account atleta.</h2><p id="auth-registration-note" class="caption"></p><label>Nome<input name="name" autocomplete="name" maxlength="100" required></label><label>Email<input name="email" type="email" autocomplete="username" maxlength="254" required></label><label>Password · almeno 12 caratteri<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><label>Codice invito<input name="invitation" autocomplete="off" maxlength="256"></label><label class="checkbox-label"><input name="terms_accepted" type="checkbox" required><span>Ho letto e accetto le <a data-legal="terms_url" target="_blank" rel="noopener noreferrer">condizioni del servizio</a>.</span></label><label class="checkbox-label"><input name="health_data_consent" type="checkbox" required><span>Acconsento al trattamento dei dati relativi all’attività fisica e alla salute descritto nell’<a data-legal="privacy_url" target="_blank" rel="noopener noreferrer">informativa privacy</a>.</span></label><button class="primary" type="submit">Crea account</button></form>
+      <form id="auth-forgot" hidden><h2>Recupera l’accesso.</h2><p class="caption">Ti invieremo un collegamento personale per scegliere una nuova password.</p><label>Email<input name="email" type="email" autocomplete="email" maxlength="254" required></label><button class="primary" type="submit">Invia le istruzioni</button></form>
+      <form id="auth-reset" hidden><h2>Scegli una nuova password.</h2><label>Nuova password<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><button class="primary" type="submit">Salva la nuova password</button></form>
+      <p class="caption" id="auth-support"></p>
+    </section>
+    <p class="auth-foot">Nuoto. Bici. Corsa. Forza. Il tuo percorso.</p>
+  </main>
+</body></html>
