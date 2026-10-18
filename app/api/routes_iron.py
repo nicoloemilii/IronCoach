@@ -210,6 +210,8 @@ def dashboard(day: Date | None = None, db: Session = Depends(get_db)):
     from app.services.planning import load_settings
     from app.services.goal_planning import goal_context
     settings, goal, _ = goal_context(db, load_settings(db))
+    from app.services.body_metrics import body_mass_index
+    body_mass = body_mass_index(settings, next(metric for metric in condition if metric['kind'] == 'weight_kg'), today)
     from app.services.training_load import sport_key
     current['sports'] = {key:sum(1 for a in rows if monday <= activity_day(a.start_time) <= today and sport_key(a.sport) == key) for key in ('bike','run','swim')}
     from app.db.experience_models import AthleteCheckin
@@ -231,7 +233,7 @@ def dashboard(day: Date | None = None, db: Session = Depends(get_db)):
         strava_status = {'status': 'connected' if connected else 'disconnected', 'connected': connected}
     except (OSError, ValueError, RuntimeError):
         strava_status = {'status': 'unavailable', 'connected': False}
-    return {'date': str(today), 'week_start': str(monday), 'condition': condition, 'week': current,
+    return {'date': str(today), 'week_start': str(monday), 'condition': condition, 'week': current, 'body_mass': body_mass,
             'recovery': recovery, 'historical': today < athlete_today(),
             'week_history':history, 'week_assessments':assessments, 'metric_assessments':metric_assessments,
             'previous_same_period': previous, 'load_trend_percent': round(trend, 1) if trend is not None else None,

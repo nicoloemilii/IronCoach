@@ -310,7 +310,7 @@ $('#undo-week').addEventListener('click', () => action(async () => { await api('
 function fillAthlete() {
   const profile = state.settings; const form = $('#athlete-form'); if (!profile || form.dataset.dirty) return;
   form.dataset.revision = state.settingsRevision ?? '';
-  for (const key of ['experience', 'race_distance', 'goal_priority', 'weekly_minutes', 'limitations']) if (form.elements[key]) form.elements[key].value = profile[key] ?? '';
+  for (const key of ['experience', 'race_distance', 'goal_priority', 'weekly_minutes', 'limitations', 'height_cm', 'birth_date', 'sex']) if (form.elements[key]) form.elements[key].value = profile[key] ?? '';
   form.elements.pool_access.checked = Boolean(profile.pool_access);
   form.elements.recent_weekly_minutes.value = profile.recent_weekly_minutes ?? '';
   for (const sport of ['cycling', 'running', 'swimming', 'strength']) form.elements[`exclude_${sport}`].checked = (profile.excluded_sports || []).includes(sport);
@@ -324,6 +324,8 @@ function fillAthlete() {
 $('#athlete-form').addEventListener('submit', event => {
   event.preventDefault(); const form = event.currentTarget;
   const payload = { ...state.settings, experience: form.elements.experience.value, race_distance: form.elements.race_distance.value, goal_priority: form.elements.goal_priority.value, weekly_minutes: Number(form.elements.weekly_minutes.value), availability: Array.from({ length: 7 }, (_, i) => Number(form.elements[`day_${i}`].value)), pool_access: form.elements.pool_access.checked, limitations: form.elements.limitations.value.trim(), thresholds: {} };
+  payload.height_cm = form.elements.height_cm.value === '' ? null : Number(form.elements.height_cm.value);
+  payload.birth_date = form.elements.birth_date.value || null; payload.sex = form.elements.sex.value || null;
   payload.recent_weekly_minutes = form.elements.recent_weekly_minutes.value === '' ? null : Number(form.elements.recent_weekly_minutes.value);
   payload.excluded_sports = ['cycling', 'running', 'swimming', 'strength'].filter(sport => form.elements[`exclude_${sport}`].checked);
   for (const [input, key] of [['ftp_watts', 'cycling_ftp_watts'], ['running_threshold', 'running_threshold_pace_sec_per_km'], ['css', 'swimming_css_sec_per_100m']]) {
@@ -557,7 +559,7 @@ function addIntervalsConnection() {
   });
 }
 function enhanceProfile() {
-  const form = $('#athlete-form'); form.elements.weekly_minutes.min = '30';
+  const form = $('#athlete-form'); form.elements.weekly_minutes.min = '30'; form.elements.birth_date.max=athleteDate();
   form.elements.limitations.maxLength = 1200;
   form.elements.ftp_watts.min = '30'; form.elements.ftp_watts.max = '700';
   form.elements.css.min = '40'; form.elements.css.max = '360';
@@ -613,6 +615,7 @@ function renderHome(home) {
     card.dataset.metricKind = item.kind;
     root.append(card);
     if (colors) { const verdict=metricCoach(item,home.condition||[]); colors.apply(card,verdict,false); }
+    if(item.kind==='weight_kg'&&home.body_mass)appendBodyMass(card,home.body_mass);
     addMetricDetails(card, item, home.condition || []);
   }
   const readiness = home.recovery || state.today?.readiness;
@@ -689,12 +692,33 @@ function showCoachJudgment(root, assessment) {
   if(action) {const decision=el('div',null,'coach-action');decision.append(el('h3','Indicazione del Coach'),el('p',action));root.append(decision);}
   root.dataset.tone=assessment.tone || 'unknown';
 }
+function editBodyProfile(body) {
+  for(const dialog of document.querySelectorAll('dialog[open]'))dialog.close();
+  page('athlete',true);const form=$('#athlete-form');form.closest('details').open=true;
+  const field=body.missing_fields?.includes('height_cm')?form.elements.height_cm:form.elements.birth_date;
+  field.focus();field.scrollIntoView?.({behavior:'smooth',block:'center'});
+}
+function appendBodyMass(card,body) {
+  const block=el('div',null,'bmi-summary');block.append(el('small','IMC · Indice di massa corporea'));
+  block.append(el('strong',body.value==null?'Da completare':`${number(body.value,2)} ${body.unit||'kg/m²'}`,'bmi-value'));
+  block.append(el('span',body.classification?.label||body.reason,'bmi-context'));
+  if(body.missing_fields?.some(field=>['height_cm','birth_date'].includes(field)))block.append(button('Completa il profilo',()=>editBodyProfile(body),'text-button bmi-profile-link'));
+  card.append(block);
+}
+function bodyMassDetails(root,body) {
+  const section=el('section',null,'bmi-detail');section.append(el('h3','Indice di massa corporea'),el('strong',body.value==null?'Non calcolabile':`${number(body.value,2)} ${body.unit||'kg/m²'}`));
+  if(body.classification)section.append(el('p',body.classification.label));
+  section.append(el('p',body.reason),el('p',body.note,'caption'));
+  const list=el('dl',null,'bmi-inputs');for(const [label,value]of [['Altezza di profilo',body.height_cm==null?'Non indicata':`${number(body.height_cm,1)} cm`],['Peso registrato',body.weight_kg==null?'Non disponibile':`${number(body.weight_kg,1)} kg · ${body.weight_date}`],['Età alla pesata',body.age_years==null?'Non disponibile':`${body.age_years} anni`],['Sesso',({male:'Maschio',female:'Femmina',other:'Altro'})[body.sex]||'Non indicato']]){list.append(el('dt',label),el('dd',value));}section.append(list,el('p','Formula: peso in kg ÷ altezza in metri al quadrato.','caption'));
+  const source=el('a','Metodo e riferimenti CDC ↗');source.href='https://www.cdc.gov/bmi/faq/';source.target='_blank';source.rel='noopener noreferrer';section.append(source);
+  section.append(button('Modifica i dati nel profilo',()=>editBodyProfile(body),'outline'));root.append(section);
+}
 function addMetricDetails(card, item, peers) {
-  const open=button('Giudizio del Coach ↗',()=>{
+  const open=button(item.kind==='weight_kg'?'Peso e IMC ↗':'Giudizio del Coach ↗',()=>{
     $('#metric-dialog-title').textContent=item.label;
     let assessment=metricCoach(item,peers);
     if(state.failedReads.has('/dashboard/home') || (card.dataset.dependsCoach && state.failedReads.has('/coach/today'))) assessment={tone:'unknown',label:'Aggiornamento da completare',reason:'Il dato mostrato è l’ultimo caricato: non posso confermare un giudizio aggiornato.',action:'Riprova Aggiorna dati.'};
-    showCoachJudgment($('#metric-detail'),assessment); $('#metric-dialog').showModal();
+    showCoachJudgment($('#metric-detail'),assessment); if(item.kind==='weight_kg'&&state.home?.body_mass)bodyMassDetails($('#metric-detail'),state.home.body_mass); $('#metric-dialog').showModal();
   },'metric-open');
   open.setAttribute('aria-label',`Apri dettagli: ${item.label}`); open.setAttribute('aria-haspopup','dialog'); card.append(open);
 }
@@ -989,7 +1013,7 @@ $('#backend-origin').textContent = location.origin;
 $('#metrics').replaceChildren(...['Fitness · CTL', 'Fatica · ATL', 'Bilancio · TSB', 'Recupero'].map(label => metric(label, '—', 'In attesa dei dati')));
 mergePlanSections(); enhanceProfile(); addImportTools(); addIntervalsConnection(); addStravaConnection(); page(location.hash.slice(1) || 'today'); action(load);
 window.IronCoachUI = { api, action, load, el, button, number, sourceLabel, sparkline,
-  openHealthMetric, openWorkout:showWorkout,
+  openHealthMetric, appendBodyMass, openWorkout:showWorkout,
   openActivity: id=>action(()=>showActivity(state.activities.find(a=>a.id===id)||{id})),
   context: () => ({weekStart:state.weekStart, revision:state.settingsRevision, raceGoalId:state.settings?.race_goal_id}),
   navigate: id => page(id, true),

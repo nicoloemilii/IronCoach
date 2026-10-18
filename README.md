@@ -101,3 +101,5 @@ I grafici delle attività aggiungono riepiloghi, lettura puntuale, zoom temporal
 Dal piano puoi chiedere al Coach di evitare determinate fasce o giorni nel periodo scelto, leggere l’anteprima e applicarla. Le regole restano modificabili; i conflitti con sedute esistenti sono espliciti. La palestra aggiunge basi, catalogo, ricerca, riordino e riutilizzo delle schede.
 
 Verifica aggiornata: 511 test backend, 130 frontend e 131 richieste integrate isolate senza errori. Grafici SVG ispezionati; layout completo nel browser ancora da verificare. Metodo e limiti in [Grafici e disponibilità](docs/GRAFICI_E_DISPONIBILITA_2026_10_18.md).
+
+La card Peso include ora l’IMC, calcolato da peso registrato e altezza confermata nel profilo. Data di nascita e sesso completano il contesto; i riferimenti per adulti non vengono applicati ai più giovani. Verifica aggiornata: 540 test backend e 132 frontend, più 59 richieste integrate isolate senza errori. Dettagli e fonti in [IMC](docs/IMC_2026_10_18.md).

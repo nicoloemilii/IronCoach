@@ -78,6 +78,9 @@ class Thresholds(BaseModel):
 class PlanningProfile(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field("", max_length=100)
+    height_cm: float | None = Field(None, ge=50, le=250, allow_inf_nan=False)
+    birth_date: date | None = None
+    sex: Literal['female', 'male', 'other'] | None = None
     experience: Literal["beginner", "intermediate", "advanced"] = "beginner"
     race_distance: Literal["sprint", "olympic", "70.3", "ironman"] = "ironman"
     goal_priority: Literal["finish", "improve", "time"] = "finish"
@@ -93,6 +96,20 @@ class PlanningProfile(BaseModel):
     excluded_sports: list[Literal["cycling", "running", "swimming", "strength"]] = Field(default_factory=list, max_length=4)
     thresholds: Thresholds = Field(default_factory=Thresholds)
     time_constraints: list[TimeConstraint] = Field(default_factory=list, max_length=100)
+
+    @field_validator('height_cm', mode='before')
+    @classmethod
+    def actual_height(cls, value):
+        if isinstance(value, bool):
+            raise ValueError('Indica l’altezza in centimetri.')
+        return value
+
+    @field_validator('birth_date')
+    @classmethod
+    def valid_birth_date(cls, value):
+        if value and (value > _today() or (_today().year-value.year-((_today().month,_today().day)<(value.month,value.day))) > 120):
+            raise ValueError('Indica una data di nascita valida, non futura, entro 120 anni.')
+        return value
 
     @field_validator("availability")
     @classmethod

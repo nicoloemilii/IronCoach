@@ -79,6 +79,8 @@ def derived_profile(db, day=None):
     weight_recent = [point for point in weight['points'] if point['date'] >= str(start) and
                      weight['latest'] and point['source'] == weight['latest']['source']]
     weight = {**weight, 'change_28d_kg': round(weight_recent[-1]['value'] - weight_recent[0]['value'], 2) if len(weight_recent) >= 2 else None}
+    from app.services.body_metrics import body_mass_index
+    body_mass = body_mass_index(settings, weight, day)
     # Aggregate observed load only; never estimate from a default FTP.
     known_loads = _known_loads(db, recent)
     recent_minutes = sum(max(0, row.duration_seconds or 0) / 60 for row in recent)
@@ -130,11 +132,12 @@ def derived_profile(db, day=None):
             'weekly_load': round(sum(value for _, value in known_loads) / 4, 1) if known_loads else None,
             'fitness': {key: round(current_metrics[key], 1) for key in ('ctl', 'atl', 'tsb', 'sleep_hours', 'hrv_ms', 'resting_hr_bpm') if current_metrics.get(key) is not None},
             'health': {'from': str(health_start), 'to': str(day), 'metrics': [item for item in observed_health['metrics'] if item['latest']], 'weight': weight},
+            'body_mass': body_mass, 'personal_details': {'height_cm': settings['height_cm'], 'birth_date': settings['birth_date'], 'sex': settings['sex']},
             'totals': {'all_time': _totals(db, activities), 'days_90': _totals(db, ninety), 'days_28': _totals(db, recent)},
             'records_note': 'Record calcolati sulle attività intere registrate. Potenza e velocità medie non sono record su segmenti, curve di potenza o soglie FTP.',
             'sports': sports, 'goal': goal, 'strengths': strengths, 'priorities': priorities,
             'restrictions': restrictions, 'thresholds': thresholds, 'goal_warnings': goal_warnings,
-            'unknown_fields': ['age', 'height_cm'] + ([] if weight['latest'] else ['weight_kg']),
+            'unknown_fields': ([] if settings['birth_date'] else ['age']) + ([] if settings['height_cm'] else ['height_cm']) + ([] if settings['sex'] else ['sex']) + ([] if weight['latest'] else ['weight_kg']),
             'manual_fields_preserved': True,
             'manual_preferences': {'weekly_minutes': settings['weekly_minutes'], 'availability': settings['availability'],
                                    'pool_access': settings['pool_access'], 'limitations': settings['limitations'], 'excluded_sports': settings['excluded_sports']}}

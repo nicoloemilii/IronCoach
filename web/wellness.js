@@ -38,6 +38,7 @@
       const card=el('div');card.append(el('small',label),el('strong',number(amount,1)));grid.append(card);
     }
     profile.append(grid);
+    if(value.body_mass&&ui.appendBodyMass){const bmi=el('section',null,'profile-bmi-card');ui.appendBodyMass(bmi,value.body_mass);profile.append(bmi);}
     const sports=el('div',null,'derived-sports');for(const sport of value.sports||[])if(sport.activities)sports.append(el('span',`${sport.label} · ${sport.activities} sedute · ${number(sport.weekly_minutes,0)} min/settimana`,'badge'));profile.append(sports);
     if(value.goal){const goal=el('section',null,'profile-goal');goal.append(el('p','OBIETTIVO ATTIVO','eyebrow'),el('h3',value.goal.name));
       const names={cycling:'Bici',running:'Corsa',swimming:'Nuoto'};

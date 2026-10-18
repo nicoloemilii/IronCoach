@@ -54,7 +54,8 @@ async function setup(t) {
         const points=item.points.filter(point=>point.date<=selected);
         return {...item,points,latest:points.at(-1)||null};
       });
-      result = { date:selected, week_start:'2026-10-12', condition, recovery:data.recovery, week:data.week||{hours:0,activities:0,elevation_m:null,load:0}, week_history:data.week_history,week_assessments:data.week_assessments,load_trend_percent:null, coach:data.homeCoach||coachFixture() };
+      if(data.weightItem)condition.unshift(clone(data.weightItem));
+      result = { date:selected, week_start:'2026-10-12', condition, body_mass:data.body_mass, recovery:data.recovery, week:data.week||{hours:0,activities:0,elevation_m:null,load:0}, week_history:data.week_history,week_assessments:data.week_assessments,load_trend_percent:null, coach:data.homeCoach||coachFixture() };
     }
     else if (method === 'POST' && pathname==='/sync/refresh') result = {runs:data.refreshRuns||[],messages:data.refreshMessages||[]};
     else if (method === 'GET' && /^\/sync\/runs\/\d+$/.test(pathname)) result = data.refreshResult || {status:'success',result:{}};
@@ -157,6 +158,23 @@ test('weekly perspective is compact above the condition cards and no longer a bo
   const {$}=await setup(t);const brief=$('.home-week-brief');assert.ok(brief);
   assert.ok(brief.compareDocumentPosition($('#metrics'))&4);assert.equal($('#today .review-card'),null);
   assert.equal($('#weekly-review').querySelectorAll('.review-row').length,0);assert.match(brief.textContent,/Bici 1/);
+});
+
+test('weight card includes the server BMI and its details without modifying weight or training colors',async t=>{
+  const {$,data,flush}=await setup(t);
+  data.weightItem={kind:'weight_kg',label:'Peso',unit:'kg',latest:{value:70,date:'2026-10-17',source:'intervals'},points:[],stale:false};
+  data.body_mass={value:22.86,unit:'kg/m²',height_cm:175,weight_kg:70,weight_date:'2026-10-17',sex:'male',age_years:36,classification:{label:'Intervallo di riferimento adulti'},reason:'Riferimento CDC per adulti da 20 anni.',note:'Non distingue massa muscolare e grasso.',missing_fields:[]};
+  $('#refresh').click();await flush();const card=$('#metrics [data-metric-kind=weight_kg]');assert.ok(card);assert.match(card.querySelector('.bmi-value').textContent,/22,86/);assert.equal(card.dataset.tone,'neutral');
+  card.querySelector('.metric-open').click();assert.match($('#metric-detail').textContent,/175 cm/);assert.match($('#metric-detail').textContent,/36 anni/);assert.match($('#metric-detail').textContent,/Maschio/);assert.ok($('#metric-detail a[href="https://www.cdc.gov/bmi/faq/"]'));
+});
+
+test('missing height gives an actionable profile link and persists height, birth date and optional sex',async t=>{
+  const {w,$,data,flush,set,submit,calls}=await setup(t);
+  data.weightItem={kind:'weight_kg',label:'Peso',unit:'kg',latest:{value:70,date:'2026-10-17',source:'intervals'},points:[],stale:false};
+  data.body_mass={value:null,reason:'Imposta l’altezza nel profilo.',missing_fields:['height_cm']};$('#refresh').click();await flush();$('.bmi-profile-link').click();
+  assert.equal($('#athlete').hidden,false);assert.equal($('#athlete-form').closest('details').open,true);assert.equal(w.document.activeElement.name,'height_cm');
+  set('#athlete-form [name=height_cm]','175');set('#athlete-form [name=birth_date]','1990-10-18');set('#athlete-form [name=sex]','female');submit('#athlete-form');await flush();
+  const saved=calls.find(call=>call.path==='/planning/profile'&&call.method==='PUT');assert.equal(saved.payload.height_cm,175);assert.equal(saved.payload.birth_date,'1990-10-18');assert.equal(saved.payload.sex,'female');
 });
 
 test('all main detail dialogs place the back action before their title',async t=>{

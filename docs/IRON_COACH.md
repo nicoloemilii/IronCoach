@@ -495,3 +495,9 @@ La revisione successiva introduce `web/charts.js`: statistiche dei campioni, esp
 `PlanningProfile.time_constraints` conserva periodi, giorni e fasce bloccate. Le route `/planning/coach/preview` e `/planning/coach/apply` interpretano disponibilità e pause, mostrano l’impatto e proteggono l’applicazione con firma dello stato e revisione del profilo. Il calendario espone le fasce ammesse; la generazione riduce la capienza e non aggiunge sedute nei giorni bloccati. Le sedute già presenti in conflitto restano visibili per una decisione esplicita. Il backup del profilo include le regole senza una nuova tabella.
 
 La palestra aggiunge basi e catalogo, riordino e riutilizzo con nuovo progresso indipendente. Verifica: 511 test backend, 130 frontend, 131 richieste integrate isolate senza errori. Dettagli, fonti e limiti in `docs/GRAFICI_E_DISPONIBILITA_2026_10_18.md`.
+
+## Indice di massa corporea
+
+`PlanningProfile` aggiunge `height_cm`, `birth_date` e `sex` facoltativi e validati. `body_metrics.body_mass_index` combina altezza confermata e peso osservato, mantenendo fonte/data, età alla pesata e dati mancanti. Non usa valori predefiniti legacy. I riferimenti CDC per adulti da 20 anni non dipendono da sesso o età; percentili pediatrici non implementati, nessuna categoria adulta per minori di 20 anni. Home e profilo derivato espongono `body_mass`, senza modificare il Coach del carico.
+
+Verifica aggiornata: 540 test backend, 132 frontend, 59 richieste integrate isolate senza errori. Specifica e fonti in `docs/IMC_2026_10_18.md`.
