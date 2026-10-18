@@ -1,0 +1,50 @@
+name: Product checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      IRON_AUTO_SYNC: '0'
+      IRON_MODE: local
+      IRON_DATA_DIR: .qa/ci-data
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: python -m pip install -r requirements-web.lock -r requirements-dev.txt
+      - run: python -m pytest tests -q -p no:cacheprovider
+      - run: npm ci --ignore-scripts
+        working-directory: web/tests
+      - run: npm test
+        working-directory: web/tests
+      - run: npm audit --audit-level=high
+        working-directory: web/tests
+  dependency-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.11'
+      - run: python -m pip install pip-audit==2.10.1
+      - run: python -m pip_audit -r requirements-web.lock --no-deps --disable-pip
+      - run: docker build -t iron-coach:ci .
+      - run: python tests/smoke_container.py

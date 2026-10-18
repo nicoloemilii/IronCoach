@@ -5,7 +5,8 @@ from datetime import datetime, timedelta
 from threading import Event, Thread, Lock
 from sqlalchemy.orm import sessionmaker, Session
 from fastapi import HTTPException
-from app.db.database import SessionLocal
+from app.db.database import SessionLocal, current_session, workspace_scope, WORKSPACE_KEY, WORKSPACE
+from contextvars import copy_context
 from app.db.iron_models import SyncRun
 
 LOCKS = {'intervals': Lock(), 'strava': Lock()}
@@ -22,7 +23,7 @@ def launch(source, days, resources, db, background_tasks=None):
         row = SyncRun(source=source, days=days, resources=resources, status='running')
         db.add(row); db.commit(); db.refresh(row)
         factory = sessionmaker(bind=db.get_bind(), expire_on_commit=False)
-        if background_tasks is not None: background_tasks.add_task(execute, row.id, factory)
+        if background_tasks is not None: background_tasks.add_task(copy_context().run, execute, row.id, factory)
         else: execute(row.id, factory)
         return {'run_id': row.id, 'status': 'running' if background_tasks else 'finished'}
     except Exception:
@@ -89,8 +90,9 @@ def execute(identifier, factory=SessionLocal):
 
 def automatic_tick():
     from app.integrations import intervals_credentials, strava
-    with SessionLocal() as db:
+    with current_session() as db:
         for source in ('intervals', 'strava'):
+            if source=='strava' and WORKSPACE.get() is not None:continue
             try:
                 configured = bool(intervals_credentials.credentials().get('api_key')) if source == 'intervals' else bool(strava.read_tokens().get('refresh_token'))
                 if not configured: continue
@@ -109,6 +111,7 @@ def automatic_tick():
 
 def start():
     global THREAD
+    if os.getenv('IRON_MODE','local')=='hosted': return
     if os.getenv('IRON_AUTO_SYNC', '1') == '0': return
     # Interrupted runs cannot be reported as still progressing after restart.
     with SessionLocal() as db:
@@ -126,3 +129,32 @@ def start():
 def stop():
     STOP.set()
     if THREAD: THREAD.join(timeout=1)
+
+
+def start_hosted(accounts):
+    """A single scheduler explicitly binds every job to its own workspace."""
+    global THREAD
+    if os.getenv('IRON_AUTO_SYNC','1')=='0':return
+    from sqlalchemy import select
+    from app.commercial.accounts import Account
+    STOP.clear();initialized=set()
+    def loop():
+        while not STOP.is_set():
+            with accounts.db() as db:identifiers=list(db.scalars(select(Account.id).where(Account.active.is_(True),Account.verified.is_(True))))
+            for identifier in identifiers:
+                if STOP.is_set():break
+                with workspace_scope(identifier):
+                    key=WORKSPACE_KEY.set(accounts.settings.vault_key)
+                    try:
+                        if identifier not in initialized:
+                            with current_session() as db:
+                                for row in db.query(SyncRun).filter_by(status='running'):
+                                    row.status='error';row.finished_at=datetime.utcnow();row.result_json=json.dumps({'message':'Sincronizzazione interrotta dal riavvio.'})
+                                db.commit()
+                            initialized.add(identifier)
+                        automatic_tick()
+                    except Exception:
+                        pass  # Failure is isolated; no credentials or personal payloads enter logs.
+                    finally:WORKSPACE_KEY.reset(key)
+            STOP.wait(30)
+    THREAD=Thread(target=loop,name='iron-hosted-sync',daemon=True);THREAD.start()

@@ -3,7 +3,6 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse
 from pathlib import Path
 from contextlib import asynccontextmanager
-from asyncio import Lock
 from starlette.responses import JSONResponse
 from app.db.database import Base, engine
 from app.db import models
@@ -27,22 +26,27 @@ from app.api.routes_training import router as training_router
 from app.db.training_models import ensure_training_schema
 from app.db.migrations import migrate
 from app.services import sync_jobs
+from app.commercial.config import from_env
 
-migrate(engine)
-ensure_health_reports_schema(engine)
-ensure_training_schema(engine)
+SETTINGS = from_env()
+
+if not SETTINGS.hosted:
+    migrate(engine)
+    ensure_health_reports_schema(engine)
+    ensure_training_schema(engine)
 
 
 @asynccontextmanager
 async def lifespan(app):
-    sync_jobs.start()
+    if SETTINGS.hosted:sync_jobs.start_hosted(app.state.accounts)
+    else:sync_jobs.start()
     yield
     sync_jobs.stop()
 
 app = FastAPI(
     title="Ironman Coach",
     description="Adaptive coaching engine locale per la preparazione Ironman",
-    version="1.3.0",
+    version="2.0.0-beta.1",
     lifespan=lifespan,
 )
 
@@ -65,20 +69,12 @@ app.include_router(training_router)
 
 # A restore must not race a request that read an old workout/profile and then
 # writes after replacement. Read-only navigation remains concurrent.
-WRITE_GATE = Lock()
+from app.commercial.mutations import guard_mutations
 
 
 @app.middleware('http')
 async def serialize_mutations(request, call_next):
-    if request.method not in ('POST', 'PUT', 'PATCH', 'DELETE'):
-        return await call_next(request)
-    if WRITE_GATE.locked():
-        return JSONResponse({'detail': 'Un’altra operazione di salvataggio è in corso. Attendi il completamento e riprova.'}, status_code=409)
-    await WRITE_GATE.acquire()
-    try:
-        return await call_next(request)
-    finally:
-        WRITE_GATE.release()
+    return await guard_mutations(request,call_next,SETTINGS.hosted)
 
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"
 app.mount("/web", StaticFiles(directory=WEB_DIR), name="web")
@@ -100,8 +96,12 @@ def web_app():
 def home(request: Request):
     if 'text/html' in request.headers.get('accept', ''):
         return RedirectResponse('/app', status_code=307)
-    return {"app": "Ironman Coach", "status": "online", "version": "1.3.0"}
+    return {"app": "Ironman Coach", "status": "online", "version": app.version}
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "database": "connected"}
+    return {"status": "ok"}
+
+
+from app.commercial.setup import install
+install(app, SETTINGS)

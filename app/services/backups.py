@@ -348,7 +348,10 @@ def preview_backup(db, raw):
         for key in list(_PREVIEWS):
             if _PREVIEWS[key]['expires_at'] <= now:
                 _PREVIEWS.pop(key)
-        while len(_PREVIEWS) >= 3:
+        own=[key for key,value in _PREVIEWS.items() if value['engine_id']==id(db.get_bind())]
+        while len(own)>=3:
+            _PREVIEWS.pop(own.pop(0))
+        while len(_PREVIEWS) >= 256:
             _PREVIEWS.pop(next(iter(_PREVIEWS)))
         _PREVIEWS[token] = {'payload': payload, 'fingerprint': digest, 'expires_at': expires,
                             'database': str(db.get_bind().url), 'engine_id': id(db.get_bind())}
@@ -395,7 +398,10 @@ def restore_backup(db, token):
     # Taking the token consumes it, including on stale/failed attempts. A fresh
     # preview is deliberately required before another destructive replacement.
     with _PREVIEW_LOCK:
-        preview = _PREVIEWS.pop(token, None)
+        preview = _PREVIEWS.get(token)
+        if preview and preview['database']==str(db.get_bind().url) and preview['engine_id']==id(db.get_bind()):
+            _PREVIEWS.pop(token)
+        else: preview=None
     if (not preview or preview['expires_at'] <= _now() or
         preview['database'] != str(db.get_bind().url) or preview['engine_id'] != id(db.get_bind())):
         raise HTTPException(409, 'Anteprima scaduta o già utilizzata. Carica nuovamente il backup.')
