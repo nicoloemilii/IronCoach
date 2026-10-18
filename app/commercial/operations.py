@@ -46,7 +46,12 @@ def backup(root,destination,key):
             for rel,path in files:
                 total+=path.stat().st_size
                 if total>MAX_UNPACKED:raise ValueError('Snapshot troppo grande: usa il backup del volume del servizio.')
-                data=path.read_bytes();manifest['files'][rel]=hashlib.sha256(data).hexdigest();archive.writestr(rel,data)
+                digest=hashlib.sha256()
+                with path.open('rb') as source,archive.open(rel,'w') as destination_file:
+                    while chunk:=source.read(1024*1024):
+                        digest.update(chunk);destination_file.write(chunk)
+                        if buffer.tell()>MAX_ARCHIVE:raise ValueError('Snapshot compresso oltre 128 MB: usa il backup cifrato del volume.')
+                manifest['files'][rel]=digest.hexdigest()
             archive.writestr('manifest.json',json.dumps(manifest))
         if buffer.tell()>MAX_ARCHIVE:raise ValueError('Snapshot compresso oltre 128 MB: usa il backup cifrato del volume.')
         encrypted=box.encrypt(buffer.getvalue());destination.parent.mkdir(parents=True,exist_ok=True)
@@ -74,11 +79,15 @@ def restore(source,target,key):
                 name=entry.filename
                 if name=='manifest.json':continue
                 if not ALLOWED.fullmatch(name) or entry.external_attr>>16&0o170000==0o120000:raise ValueError('Percorso snapshot non autorizzato.')
-                data=archive.read(entry)
-                if hashlib.sha256(data).hexdigest()!=manifest['files'][name]:raise ValueError('Contenuto snapshot alterato.')
                 path=(staging/name).resolve()
                 if not path.is_relative_to(staging):raise ValueError('Percorso snapshot non valido.')
-                path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(data)
+                path.parent.mkdir(parents=True,exist_ok=True);digest=hashlib.sha256();written=0
+                with archive.open(entry) as source_file,path.open('wb') as destination_file:
+                    while chunk:=source_file.read(1024*1024):
+                        written+=len(chunk)
+                        if written>entry.file_size:raise ValueError('Dimensione snapshot non valida.')
+                        digest.update(chunk);destination_file.write(chunk)
+                if digest.hexdigest()!=manifest['files'][name]:raise ValueError('Contenuto snapshot alterato.')
                 if name.endswith('.db'):
                     with closing(sqlite3.connect(path)) as db:
                         if db.execute('PRAGMA integrity_check').fetchone()[0]!='ok':raise ValueError('Database snapshot non integro.')
