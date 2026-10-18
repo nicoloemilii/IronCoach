@@ -56,7 +56,7 @@
     const gym = el('fieldset', null, 'manual-gym'); gym.hidden = true; gym.disabled = true;
     gym.append(el('legend', 'La tua scheda palestra'));
     const exerciseList = el('div', null, 'gym-builder-list'); gym.append(exerciseList);
-    function addExercise() {
+    function addExercise(value = {}) {
       if (exerciseList.children.length >= 30) return;
       const row = el('div', null, 'gym-exercise-builder');
       const fields = el('div', null, 'form-grid');
@@ -70,9 +70,27 @@
       inputField(fields, 'Carico · kg (facoltativo)', 'exercise_weight', 'number', { min: 0, max: 1000, step: .5, placeholder: 'Corpo libero' });
       inputField(fields, 'Recupero tra le serie · secondi', 'exercise_rest', 'number', { required: true, min: 0, max: 600, step: 1, value: 90 });
       inputField(fields, 'Indicazioni', 'exercise_notes', 'text', { maxLength: 1000, placeholder: 'Es. movimento controllato' });
-      row.append(fields, button('Rimuovi esercizio', () => { row.remove(); form.dataset.dirty = 'true'; }, 'text-button')); exerciseList.append(row);
+      row.append(fields, button('Sposta su',()=>{if(row.previousElementSibling)exerciseList.insertBefore(row,row.previousElementSibling);form.dataset.dirty='true';},'text-button'),button('Sposta giù',()=>{if(row.nextElementSibling)exerciseList.insertBefore(row.nextElementSibling,row);form.dataset.dirty='true';},'text-button'), button('Rimuovi esercizio', () => { row.remove(); form.dataset.dirty = 'true'; }, 'text-button')); exerciseList.append(row);
+      if(value && typeof value.name==='string'){for(const [key,val]of Object.entries({name:value.name,sets:value.sets||2,reps:value.reps||10,seconds:value.work_seconds||30,weight:value.weight_kg??'',rest:value.rest_seconds??60,notes:value.notes||'',mode:value.work_seconds?'time':'reps'})){row.querySelector(`[name="exercise_${key}"]`).value=val;}updateMode();}
+      return row;
     }
-    gym.append(button('+ Aggiungi esercizio', addExercise, 'outline')); form.append(gym);
+    const catalogue=[
+      {name:'Squat a corpo libero',group:'Gambe',equipment:'Corpo libero',reps:10,notes:'Usa una profondità che controlli e mantieni il movimento fluido.'},
+      {name:'Affondi indietro',group:'Gambe',equipment:'Corpo libero',reps:8,notes:'Ripetizioni per lato; usa un appoggio stabile se necessario.'},
+      {name:'Ponte glutei',group:'Gambe',equipment:'Tappetino',reps:12,notes:'Sali in controllo e mantieni il bacino stabile.'},
+      {name:'Calf raise',group:'Gambe',equipment:'Corpo libero',reps:12,notes:'Solleva e abbassa i talloni senza rimbalzi.'},
+      {name:'Rematore con manubri',group:'Parte alta',equipment:'Manubri',reps:10,notes:'Scegli il carico prima di salvare la scheda.'},
+      {name:'Push-up su appoggio',group:'Parte alta',equipment:'Appoggio stabile',reps:8,notes:'Scegli un’altezza che consenta un movimento controllato.'},
+      {name:'Plank',group:'Core',equipment:'Tappetino',work_seconds:25,notes:'Mantieni una posizione che riesci a controllare.'},
+      {name:'Dead bug',group:'Core',equipment:'Tappetino',reps:8,notes:'Ripetizioni per lato; muovi lentamente braccio e gamba opposti.'},
+      {name:'Bird dog',group:'Core',equipment:'Tappetino',reps:8,notes:'Ripetizioni per lato, senza ruotare il bacino.'}
+    ];
+    const libraryPicker=el('details',null,'exercise-catalogue');libraryPicker.append(el('summary','Sfoglia gli esercizi'));
+    const catalogueSearch=inputField(libraryPicker,'Cerca esercizio, gruppo o attrezzo','exercise_search','search',{placeholder:'Es. core, gambe, manubri'}),catalogueRows=el('div',null,'exercise-catalogue-grid');libraryPicker.append(catalogueRows);
+    function drawCatalogue(){const query=catalogueSearch.value.toLocaleLowerCase('it-IT');catalogueRows.replaceChildren();for(const exercise of catalogue.filter(e=>`${e.name} ${e.group} ${e.equipment}`.toLocaleLowerCase('it-IT').includes(query))){const item=el('article');item.append(el('strong',exercise.name),el('small',`${exercise.group} · ${exercise.equipment}`),button('Aggiungi',()=>{addExercise(exercise);form.dataset.dirty='true';},'outline'));catalogueRows.append(item);}if(!catalogueRows.children.length)catalogueRows.append(el('p','Nessuna corrispondenza. Puoi aggiungere un esercizio personalizzato.','caption'));}
+    catalogueSearch.addEventListener('input',drawCatalogue);drawCatalogue();gym.append(libraryPicker,button('+ Aggiungi esercizio',()=>addExercise(),'outline'));form.append(gym);
+    function prepareGym(title,exercises,minutes=30){sport.value='strength';sport.dispatchEvent(new Event('change'));name.value=title;duration.value=minutes;rpe.value=4;date.value=today();purpose.value='Forza di supporto';exerciseList.replaceChildren();for(const exercise of exercises)addExercise(exercise);form.dataset.dirty='true';card.scrollIntoView?.({behavior:'smooth',block:'start'});name.focus();}
+
     sport.addEventListener('change', () => { const strength = sport.value === 'strength'; gym.hidden = !strength; gym.disabled = !strength; aerobic.hidden = strength; aerobic.disabled = strength; if (strength && !exerciseList.children.length) addExercise(); });
     const status = el('p', '', 'manual-training-status'); status.setAttribute('role', 'status');
     const submit = el('button', 'Salva nel piano', 'primary'); submit.type = 'submit'; form.append(status, submit); card.append(form); container.append(card);
@@ -107,19 +125,22 @@
     });
 
     const library = el('article', null, 'card gym-library'); library.append(el('p', 'SERIE, RECUPERI, PROGRESSI', 'eyebrow'), el('h2', 'Le tue schede palestra'));
+    library.append(el('p','Crea una base, personalizza esercizi e carichi, poi salvala nel giorno scelto. Puoi riutilizzare le tue schede senza perdere l’avanzamento delle precedenti.','muted'));
+    const templates=el('div',null,'gym-template-grid');
+    for(const [title,indices]of [['Gambe e core',[0,2,6]],['Parte alta e stabilità',[4,5,8]],['Core a corpo libero',[6,7,8]]]){const tile=el('article');tile.append(el('span','BOZZA MODIFICABILE','eyebrow'),el('h3',title),el('p',indices.map(i=>catalogue[i].name).join(' · ')),button('Usa come base',()=>prepareGym(title,indices.map(i=>catalogue[i])),'outline'));templates.append(tile);}library.append(templates,button('+ Crea scheda vuota',()=>prepareGym('La mia scheda',[]),'primary'));
+    const librarySearch=inputField(library,'Cerca tra le tue schede','gym_search','search',{placeholder:'Nome o esercizio'});
     const routines = el('div', null, 'list'); routines.setAttribute('aria-live', 'polite'); library.append(routines); container.append(library);
-    let loading = false;
+    let loading = false, libraryEntries=[];
+    function drawLibrary(){routines.replaceChildren();const query=librarySearch.value.toLocaleLowerCase('it-IT');const entries=libraryEntries.filter(row=>`${row.name} ${row.payload.exercises.map(e=>e.name).join(' ')}`.toLocaleLowerCase('it-IT').includes(query));
+      if(!entries.length)routines.append(el('p',libraryEntries.length?'Nessuna scheda corrisponde alla ricerca.':'Le tue schede salvate appariranno qui. Inizia da una base o crea la tua.','empty-state'));
+      for(const row of entries){const wrapper=el('article',null,'gym-library-routine'),item=button('',()=>action(()=>openGym(row.id)),'list-row');const summary=el('span');const sets=row.payload.exercises.reduce((n,e)=>n+e.sets,0);summary.append(el('strong',row.name),el('small',`${row.date} · ${row.payload.exercises.length} esercizi · ${sets} serie · ${number(row.duration_min)} min`));item.append(summary,el('span',row.date>today()?'Anteprima →':'Segui la scheda →','badge'));wrapper.append(item);const details=el('details');details.append(el('summary','Esercizi e recuperi'));const list=el('ul');for(const e of row.payload.exercises)list.append(el('li',`${e.name} · ${e.sets} × ${e.reps||e.work_seconds+' s'}${e.weight_kg!=null?' · '+e.weight_kg+' kg':''} · recupero ${e.rest_seconds} s`));details.append(list);wrapper.append(details,button('Riutilizza in una nuova seduta',()=>prepareGym(row.name,row.payload.exercises,row.duration_min),'text-button'));routines.append(wrapper);}
+    }
+    librarySearch.addEventListener('input',drawLibrary);
     async function refreshLibrary() {
       if (loading) return; loading = true;
       try {
         const workouts = await api('/coach/workouts?limit=500'); routines.replaceChildren();
-        const entries = workouts.filter(row => row.sport === 'strength' && row.payload?.exercises?.length && !['superseded', 'skipped', 'cancelled'].includes(row.status));
-        if (!entries.length) routines.append(el('p', 'Crea la prima scheda scegliendo Palestra qui sopra.', 'empty-state'));
-        for (const row of entries) {
-          const item = button('', () => action(() => openGym(row.id)), 'list-row');
-          const summary = el('span'); summary.append(el('strong', row.name), el('small', `${row.date} · ${row.payload.exercises.length} esercizi · ${number(row.duration_min)} min`));
-          item.append(summary, el('span', 'Segui la scheda →', 'caption')); routines.append(item);
-        }
+        libraryEntries=workouts.filter(row=>row.sport==='strength'&&row.payload?.exercises?.length&&!['superseded','skipped','cancelled'].includes(row.status));drawLibrary();
       } catch (error) { routines.replaceChildren(el('p', 'Schede non disponibili.'), button('Riprova', () => action(refreshLibrary), 'outline')); }
       finally { loading = false; }
     }
@@ -150,7 +171,7 @@
     function renderSession() {
       const exercises = session.exercises, active = session.progress.active_exercise, selected = exercises[active];
       const future = session.date > today(); heading.textContent = session.name;
-      content.replaceChildren(el('p', `${session.completed_count} / ${session.total_sets} serie completate`, 'gym-progress-summary'));
+      content.replaceChildren(el('p',`${session.completed_count} / ${session.total_sets} serie completate`,'gym-progress-summary'));const progress=el('progress');progress.max=session.total_sets;progress.value=session.completed_count;progress.setAttribute('aria-label','Serie completate nella scheda');content.append(progress);
       if (future) content.append(el('p', 'La scheda è programmata per un giorno futuro. Puoi consultarla e seguirla dal giorno indicato.', 'caption'));
       const timer = el('section', null, 'gym-timer'); timer.setAttribute('aria-label', 'Timer della scheda');
       timer.append(el('p', selected.name, 'eyebrow')); const output = el('output', '', 'gym-timer-display'); output.setAttribute('aria-label', 'Secondi rimanenti'); timer.append(output);
@@ -160,6 +181,7 @@
         button(clock.ends != null ? 'Pausa' : 'Riprendi', () => action(async () => { if (clock.ends != null) clock.pause(); else clock.resume(); await persist(); }), 'outline'),
         button('Azzera', () => action(async () => { clock.reset(); await persist(); }), 'text-button'));
       if (selected.work_seconds) controls.append(button(`Timer esercizio · ${selected.work_seconds} s`, () => action(async () => { clock.start(selected.work_seconds); await persist(); }), 'outline'));
+      const next=exercises.findIndex((exercise,index)=>Array.from({length:exercise.sets},(_,set)=>session.progress.completed_sets.some(p=>p.exercise_index===index&&p.set_index===set)).some(done=>!done));if(next>=0&&next!==active)controls.append(button('Vai al prossimo esercizio da completare',()=>action(async()=>{clock.pause();await persist({active_exercise:next});}),'outline'));
       timer.append(controls); content.append(timer);
       const list = el('div', null, 'gym-live-exercises');
       for (const [index, exercise] of exercises.entries()) {

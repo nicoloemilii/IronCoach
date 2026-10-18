@@ -39,7 +39,7 @@ async function setup(t,customFetch){
   const marker="page(location.hash.slice(1) || 'today'); action(load);";
   assert.ok(script.includes(marker),'The fixture must disable only the automatic initial dashboard load.');
   const focused=script.replace(marker,"page(location.hash.slice(1) || 'today');")+'\nwindow.__activityFixture={showActivity,state};';
-  w.eval(colors);w.eval(focused);
+  w.eval(fs.readFileSync(path.join(__dirname,'../charts.js'),'utf8'));w.eval(fs.readFileSync(path.join(__dirname,'../charts.js'),'utf8'));w.eval(colors);w.eval(focused);
   t.after(()=>dom.window.close());
   const flush=async()=>{for(let index=0;index<8;index++)await new Promise(resolve=>setImmediate(resolve));assert.equal(errors.length,0,errors.map(error=>error.stack||error.message).join('\n'));};
   const open=async(row=activity())=>{await w.__activityFixture.showActivity(row);await flush();};
@@ -59,6 +59,11 @@ test('opening an activity loads its recorded summary, real route, selectable cha
   assert.ok($('#activity-detail .activity-stream-chart'));
   assert.match($('#activity-detail .activity-coach').textContent,/82/);
   assert.match($('#activity-detail .activity-coach').textContent,/Conserva il recupero/);
+});
+
+test('switching series preserves a personal target in the current activity view',async t=>{
+  const {w,$,open,flush}=await setup(t);await open();const form=$('.chart-target-form');form.elements.target_low.value='120';form.elements.target_high.value='180';form.dispatchEvent(new w.Event('submit',{cancelable:true}));assert.ok($('.reference-band'));
+  const select=$('[name=activity_stream]');select.value='heart_rate';select.dispatchEvent(new w.Event('change'));await flush();assert.equal($('.reference-band'),null);select.value='power';select.dispatchEvent(new w.Event('change'));assert.ok($('.reference-band'));assert.match($('.chart-band-legend').textContent,/120–180/);
 });
 
 test('switching streams changes the actual chart and keeps missing samples finite and unfilled',async t=>{

@@ -31,6 +31,7 @@ from app.services.health import series
 from app.services.goal_planning import goal_context, allocation_for_goal, focus_for_sport
 from app.db.iron_models import RaceGoal
 from app.db.progress_models import WorkoutResolution
+from app.services.time_constraints import TimeConstraint, windows, available_minutes
 
 SPORTS = ("cycling", "running", "swimming", "strength")
 LABELS = {"cycling": "Bici", "running": "Corsa", "swimming": "Nuoto", "strength": "Forza e mobilità"}
@@ -91,6 +92,7 @@ class PlanningProfile(BaseModel):
     limitations: str = Field("", max_length=1200)
     excluded_sports: list[Literal["cycling", "running", "swimming", "strength"]] = Field(default_factory=list, max_length=4)
     thresholds: Thresholds = Field(default_factory=Thresholds)
+    time_constraints: list[TimeConstraint] = Field(default_factory=list, max_length=100)
 
     @field_validator("availability")
     @classmethod
@@ -514,6 +516,11 @@ def get_week(db: Session, value=None) -> dict:
     for index in range(7):
         day = (start + timedelta(days=index)).isoformat()
         sessions = [serialize_workout(row) for row in rows if row.date == day]
+        for session in sessions:
+            if session['status'] == 'planned' and day >= _today().isoformat():
+                window = windows(profile, day)
+                if window['restricted']:
+                    session['payload']['time_window'] = window
         sessions.sort(key=lambda row: (row["payload"].get("brick", {}).get("group_id", ""), row["payload"].get("brick", {}).get("sequence", 0), row["id"]))
         active = [row for row in sessions if row["status"] != "skipped"]
         for row in active:
@@ -526,7 +533,7 @@ def get_week(db: Session, value=None) -> dict:
         transition = 5 * len({r["payload"]["brick"]["group_id"] for r in active if r["payload"].get("brick", {}).get("sequence") == 1})
         completed = sum(r["duration_min"] for r in active if r["status"] == "completed")
         required = planned - completed + max(completed, recorded[day]) + transition
-        days.append({"date": day, "available_minutes": profile["availability"][index], "planned_minutes": planned, "transition_minutes": transition, "required_minutes": required, "recorded_minutes": round(recorded[day], 1), "sessions": sessions})
+        days.append({"date": day, "available_minutes": available_minutes(profile, day), "time_window": windows(profile, day), "planned_minutes": planned, "transition_minutes": transition, "required_minutes": required, "recorded_minutes": round(recorded[day], 1), "sessions": sessions})
     total = sum(day["planned_minutes"] for day in days)
     reasons = list(metadata.get("rationale") or capacity["rationale"]) + goal_warnings
     signature = race_goal['signature'] if race_goal else None
@@ -548,6 +555,7 @@ def generate_week(db: Session, value=None, regenerate=False) -> dict:
     profile, race_goal, goal_warnings = goal_context(db, load_settings(db))
     capacity = _capacity(db, profile, start)
     rows = _rows(db, start)
+    profile['availability'] = [available_minutes(profile, start + timedelta(days=i)) for i in range(7)]
     before = _snapshot(rows)
     next_version = (_latest(db, start).version + 1) if _latest(db, start) else 1
     # Replacing a generated week never deletes manual or completed sessions.
@@ -701,7 +709,7 @@ def _prepare_workout_change(db: Session, workout_id: int, action: str, new_date:
         group_ids = {row.id, linked.id} if linked else {row.id}
         other = _occupancy(db, start, [r for r in _rows(db, start) if r.id not in group_ids])[new_date.isoformat()]
         required = row.duration_min + (linked.duration_min + 5 if linked else 0)
-        if other + required > profile["availability"][new_date.weekday()]:
+        if other + required > available_minutes(profile, new_date):
             raise HTTPException(409, "Il giorno scelto non ha abbastanza minuti disponibili.")
         revised_row['date'] = new_date.isoformat()
         if linked:

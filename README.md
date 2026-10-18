@@ -93,3 +93,11 @@ Obiettivo e piano condividono una sola voce di navigazione. Allenamenti permette
 I grafici settimanali confrontano tutte le barre con lo stesso riferimento e la stessa opacità. L’intervallo di Salute è sopra il grafico; le card manuali, duplicate e di contesto CTL/ATL quotidiano non occupano la griglia.
 
 La revisione attività/peso/palestra ha inoltre superato una prova integrata di 66 richieste API su database isolato: salvataggi consecutivi, timer palestra e conservazione delle sedute manuali dopo generazione del piano. Dettagli in `docs/ATTIVITA_PESO_PALESTRA_2026_10_18.md`.
+
+## Grafici, disponibilità e palestra
+
+I grafici delle attività aggiungono riepiloghi, lettura puntuale, zoom temporale e fasce obiettivo personalizzabili. Salute distingue la fascia abituale personale da un obiettivo; la potenza bici può mostrare il riferimento endurance soltanto con FTP dichiarata. Riepilogo Home compatto, Indietro in alto a sinistra, filtro Altro e record colorati completano la revisione.
+
+Dal piano puoi chiedere al Coach di evitare determinate fasce o giorni nel periodo scelto, leggere l’anteprima e applicarla. Le regole restano modificabili; i conflitti con sedute esistenti sono espliciti. La palestra aggiunge basi, catalogo, ricerca, riordino e riutilizzo delle schede.
+
+Verifica aggiornata: 511 test backend, 130 frontend e 131 richieste integrate isolate senza errori. Grafici SVG ispezionati; layout completo nel browser ancora da verificare. Metodo e limiti in [Grafici e disponibilità](docs/GRAFICI_E_DISPONIBILITA_2026_10_18.md).

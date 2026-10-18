@@ -58,6 +58,28 @@ def test_recorded_summary_works_offline_without_inventing_gps_or_measurements(ap
     assert value['availability']['status'] == 'summary_only'
 
 
+@pytest.mark.parametrize('ftp', [None, 200])
+def test_power_band_requires_personal_ftp_and_never_invents_a_heart_rate_zone(api, ftp):
+    client, engine = api
+    from app.services.planning import PlanningProfile, save_settings
+    with Session(engine) as db:
+        profile = PlanningProfile()
+        if ftp:
+            profile.thresholds.cycling_ftp_watts.value = ftp
+            profile.thresholds.cycling_ftp_watts.source = 'estimated'
+        save_settings(db, profile)
+        identifier = activity(db, payload={'streams': [{'type':'time','data':[0,60]},
+                                                       {'type':'watts','data':[100,160]},
+                                                       {'type':'heartrate','data':[120,150]}]})
+    result = client.get(f'/activities/{identifier}/detail').json()['chart_references']
+    assert 'heart_rate' not in result
+    if ftp:
+        assert result['power']['lower'] == 112 and result['power']['upper'] == 150
+        assert 'attuale stimata' in result['power']['note']
+    else:
+        assert result == {}
+
+
 def test_real_observation_null_and_zero_take_precedence_over_canonical_values(api):
     client, engine = api
     with Session(engine) as db:

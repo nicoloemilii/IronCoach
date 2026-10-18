@@ -251,8 +251,17 @@ def activity_detail(db, activity, *, fetch_remote=True):
         coordinates = [coordinates[index] for index in indices]
     status = 'partial' if attempted and remote_message else 'complete' if charts else 'summary_only'
     message = remote_message or (None if charts else 'Sono disponibili i riepiloghi; questa attività non contiene serie temporali utilizzabili.')
+    references = {}
+    if sport_key(activity.sport) == 'bike' and any(chart['kind'] == 'power' for chart in charts):
+        from app.services.planning import load_settings
+        threshold = load_settings(db)['thresholds']['cycling_ftp_watts']
+        if threshold['value']:
+            references['power'] = {'lower': round(threshold['value'] * .56, 1), 'upper': round(threshold['value'] * .75, 1),
+                                   'label': 'Z2 potenza · riferimento endurance',
+                                   'note': 'FTP attuale ' + ('stimata' if threshold['source'] == 'estimated' else 'misurata') + '; non è l’obiettivo di ogni seduta',
+                                   'source_url': 'https://www.trainingpeaks.com/blog/power-training-levels/'}
     return dict(activity_id=activity.id, name=activity.name, sport=activity.sport, start_time=activity.start_time,
-                summary=summary, derived_fields=derived, streams=charts,
+                summary=summary, derived_fields=derived, streams=charts, chart_references=references,
                 route=dict(available=len(coordinates)>=2, points=coordinates, sample_count=route_count,
                            downsampled=route_count>MAX_ROUTE_POINTS),
                 provider_url=f'https://intervals.icu/activities/{remote_id}' if remote_id else None,

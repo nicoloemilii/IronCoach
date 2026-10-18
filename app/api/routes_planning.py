@@ -5,6 +5,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
+from app.services.time_constraints import CoachRequest, CoachApply, preview as coach_preview, apply as coach_apply
 
 from app.db.database import get_db
 from app.services.planning import PlanningProfile, generate_week, get_settings, get_week, modify_workout, save_settings, undo_week, activate_goal, preview_workout
@@ -82,3 +83,13 @@ def preview_change(workout_id: int, payload: WorkoutChange, db: Session = Depend
 @router.post("/undo")
 def undo(payload: WeekRequest | None = None, db: Session = Depends(get_db)):
     return undo_week(db, payload.start if payload else None)
+
+
+@router.post('/coach/preview')
+def preview_coach_request(payload: CoachRequest, db: Session = Depends(get_db)):
+    return coach_preview(db, payload)
+
+
+@router.post('/coach/apply')
+def apply_coach_request(payload: CoachApply, db: Session = Depends(get_db)):
+    return coach_apply(db, payload)

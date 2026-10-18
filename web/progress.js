@@ -110,7 +110,7 @@
   }
 
   const preparationDialog=el('dialog'); preparationDialog.id='goal-preparation-dialog'; preparationDialog.setAttribute('aria-label','Preparazione operativa della gara');
-  const prepTop=el('div',null,'dialog-top'); prepTop.append(el('h2','Preparare la gara'),button('Chiudi',()=>preparationDialog.close()));
+  const prepTop=el('div',null,'dialog-top'); prepTop.append(button('← Indietro',()=>preparationDialog.close(),'back-button'),el('h2','Preparare la gara'));
   const prepContent=el('div'); preparationDialog.append(prepTop,prepContent); document.body.append(preparationDialog);
   let preparationVersion=0;let currentPreparationId=null;
   async function openPreparation(id,name) {

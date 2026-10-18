@@ -64,6 +64,26 @@ async function setup(t, { plan = gymFixture(), fail = {} } = {}) {
   return { w, $, calls, state, flush, click, fill, submit, advance: seconds => { now += seconds * 1000; }, intervals };
 }
 
+test('gym templates create editable drafts without writing or changing existing progress',async t=>{
+  const { $,calls,flush,submit }=await setup(t);
+  $('.gym-template-grid button').click();await flush();
+  assert.equal($('[name=sport]').value,'strength');assert.equal($('[name=name]').value,'Gambe e core');
+  assert.equal($('.gym-builder-list').children.length,3);
+  assert.equal(calls.filter(call=>call.method==='POST'||call.method==='PUT').length,0);
+  submit();await flush();const created=calls.find(call=>call.url==='/training/manual');
+  assert.equal(created.value.exercises.length,3);assert.equal(created.value.exercises[2].work_seconds,25);
+});
+
+test('gym catalogue search and exercise reordering preserve exact exercise configuration',async t=>{
+  const {w,$,fill,flush,click}=await setup(t);fill('sport','strength');$('[name=sport]').dispatchEvent(new w.Event('change'));
+  fill('exercise_search','Dead bug');assert.equal($('.exercise-catalogue-grid').children.length,1);
+  $('.exercise-catalogue-grid button').click();await flush();assert.equal($('.gym-builder-list').children.length,2);
+  const row=$('.gym-builder-list').lastElementChild;assert.equal(row.querySelector('[name=exercise_name]').value,'Dead bug');
+  [...row.querySelectorAll('button')].find(n=>n.textContent==='Sposta su').click();
+  assert.equal($('.gym-builder-list').firstElementChild.querySelector('[name=exercise_name]').value,'Dead bug');
+  assert.equal($('.gym-builder-list').firstElementChild.querySelector('[name=exercise_reps]').value,'8');
+});
+
 test('manual builder captures all inputs before controls are disabled and persists to calendar', async t => {
   const { $, fill, submit, calls, state, flush } = await setup(t);
   fill('name', 'Fondo facile'); fill('duration_min', '50'); fill('purpose', 'Resistenza'); submit(); await flush();

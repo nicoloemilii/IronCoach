@@ -487,3 +487,11 @@ Verifica 1.3 del 18 ottobre 2026: 490 test backend e 116 test frontend superati.
 La generazione automatica conserva le sedute manuali. Spostare una scheda mantiene gli esercizi. Accorciare una seduta aerobica manuale riduce le sue fasi originali; il generico accorciamento di una scheda palestra viene respinto per evitare di cambiare durata lasciando serie incoerenti. Il nuovo gym_progress è una tabella additiva e opzionale nei backup precedenti.
 
 Verifica finale di questa revisione: 490 test backend e 116 test frontend; prova integrata palestra/pianificazione con 66 richieste HTTP, zero errori e nessuna attività creata. Grafici SVG renderizzati e ispezionati come artefatti; il layout completo nel browser rimane non verificato.
+
+## Grafici e disponibilità temporanee
+
+La revisione successiva introduce `web/charts.js`: statistiche dei campioni, esplorazione, zoom e fasce personali. Le fasce HRV/sonno/FC a riposo restano descrittive; il riferimento Z2 bici richiede la FTP del profilo. Nessuna zona cardiaca ottimale è dedotta dal massimo registrato.
+
+`PlanningProfile.time_constraints` conserva periodi, giorni e fasce bloccate. Le route `/planning/coach/preview` e `/planning/coach/apply` interpretano disponibilità e pause, mostrano l’impatto e proteggono l’applicazione con firma dello stato e revisione del profilo. Il calendario espone le fasce ammesse; la generazione riduce la capienza e non aggiunge sedute nei giorni bloccati. Le sedute già presenti in conflitto restano visibili per una decisione esplicita. Il backup del profilo include le regole senza una nuova tabella.
+
+La palestra aggiunge basi e catalogo, riordino e riutilizzo con nuovo progresso indipendente. Verifica: 511 test backend, 130 frontend, 131 richieste integrate isolate senza errori. Dettagli, fonti e limiti in `docs/GRAFICI_E_DISPONIBILITA_2026_10_18.md`.

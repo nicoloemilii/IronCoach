@@ -110,7 +110,7 @@ async function setup(t) {
   const flush = async () => { for (let i = 0; i < 12; i++) await new Promise(resolve => setImmediate(resolve)); assert.equal(errors.length, 0, errors.map(e => e.stack || e.message).join('\n')); };
   const submit = async selector => { $(selector).dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true })); await flush(); };
   const set = (selector, value) => { const input = $(selector); assert.ok(input, `Missing control ${selector}`); if (input.type === 'checkbox') input.checked = value; else input.value = value; input.dispatchEvent(new w.Event('input', { bubbles: true })); };
-  w.eval(colorsScript); w.eval(script); await flush();
+  w.eval(fs.readFileSync(path.join(__dirname,'../charts.js'),'utf8')); w.eval(colorsScript); w.eval(script); await flush();
   assert.ok(!$('#notice').classList.contains('error'), $('#notice').textContent);
   return { w, $, data, calls, flush, submit, set, advance: ms => { now += ms; intervals.forEach(callback => callback()); } };
 }
@@ -151,6 +151,32 @@ test('Home removes promotional banner and legend and moves optional notes to Sal
   assert.equal($('#today #checkin'), null); assert.ok($('#health #checkin'));
   assert.equal($('#health .wellness-notes'),null);assert.equal($('#health .legacy-checkin').hidden,true);
   assert.ok($('#daily-goal'));
+});
+
+test('weekly perspective is compact above the condition cards and no longer a bottom section',async t=>{
+  const {$}=await setup(t);const brief=$('.home-week-brief');assert.ok(brief);
+  assert.ok(brief.compareDocumentPosition($('#metrics'))&4);assert.equal($('#today .review-card'),null);
+  assert.equal($('#weekly-review').querySelectorAll('.review-row').length,0);assert.match(brief.textContent,/Bici 1/);
+});
+
+test('all main detail dialogs place the back action before their title',async t=>{
+  const {$}=await setup(t);for(const id of ['activity-dialog','metric-dialog','workout-dialog','session-edit-dialog']){
+    const top=$('#'+id+' .dialog-top');assert.equal(top.firstElementChild.tagName,'BUTTON',id);assert.match(top.firstElementChild.textContent,/← Indietro/,id);
+  }
+});
+
+test('health chart shades only a supported personal range and labels it as descriptive',async t=>{
+  const {w,$,flush}=await setup(t);const points=Array.from({length:10},(_,i)=>({date:plusDays('2026-10-07',i),value:48+i%4,source:'intervals'}));
+  w.IronCoachUI.openHealthMetric({kind:'hrv_ms',label:'HRV',unit:'ms',points,latest:points.at(-1),stale:false});await flush();
+  assert.ok($('#metric-detail .reference-band'));assert.ok([...$('#metric-detail .performance-chart').querySelectorAll('line[stroke-width="3"]')].every(line=>line.getAttribute('stroke')!=='#ffffff'));assert.match($('#metric-detail .chart-data-note').textContent,/intervallo abituale.*non un obiettivo/);
+  $('#close-metric').click();w.IronCoachUI.openHealthMetric({kind:'weight_kg',label:'Peso',unit:'kg',points:points.map(p=>({...p,value:65})),latest:{...points.at(-1),value:65},stale:false});
+  assert.equal($('#metric-detail .reference-band'),null);assert.match($('#metric-detail .chart-data-note').textContent,/Nessuna fascia/);
+});
+
+test('other activity filter includes non-triathlon disciplines and strength has its own selection',async t=>{
+  const {w,$,data,flush}=await setup(t);data.activities.push({id:92,name:'Escursione',sport:'Hike',source:'manual',start_time:'2026-10-17T08:00:00Z'},{id:93,name:'Pesi',sport:'WeightTraining',source:'manual',start_time:'2026-10-17T08:00:00Z'});
+  $('#refresh').click();await flush();const select=$('#activity-sport');select.value='other';select.dispatchEvent(new w.Event('change'));assert.match($('#activity-list').textContent,/Escursione/);assert.doesNotMatch($('#activity-list').textContent,/Giro di prova|Pesi/);
+  select.value='strength';select.dispatchEvent(new w.Event('change'));assert.match($('#activity-list').textContent,/Pesi/);assert.doesNotMatch($('#activity-list').textContent,/Escursione/);
 });
 
 test('condition details contain only a Coach judgment and advice without source or raw tables', async t => {
