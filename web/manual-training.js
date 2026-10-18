@@ -71,30 +71,183 @@
       inputField(fields, 'Recupero tra le serie · secondi', 'exercise_rest', 'number', { required: true, min: 0, max: 600, step: 1, value: 90 });
       inputField(fields, 'Indicazioni', 'exercise_notes', 'text', { maxLength: 1000, placeholder: 'Es. movimento controllato' });
       row.append(fields, button('Sposta su',()=>{if(row.previousElementSibling)exerciseList.insertBefore(row,row.previousElementSibling);form.dataset.dirty='true';},'text-button'),button('Sposta giù',()=>{if(row.nextElementSibling)exerciseList.insertBefore(row.nextElementSibling,row);form.dataset.dirty='true';},'text-button'), button('Rimuovi esercizio', () => { row.remove(); form.dataset.dirty = 'true'; }, 'text-button')); exerciseList.append(row);
+      row.addEventListener('input',()=>{row.dataset.edited='true';});row.addEventListener('change',()=>{row.dataset.edited='true';});
       if(value && typeof value.name==='string'){for(const [key,val]of Object.entries({name:value.name,sets:value.sets||2,reps:value.reps||10,seconds:value.work_seconds||30,weight:value.weight_kg??'',rest:value.rest_seconds??60,notes:value.notes||'',mode:value.work_seconds?'time':'reps'})){row.querySelector(`[name="exercise_${key}"]`).value=val;}updateMode();}
       return row;
     }
     const catalogue=[
       {name:'Squat a corpo libero',group:'Gambe',equipment:'Corpo libero',reps:10,notes:'Usa una profondità che controlli e mantieni il movimento fluido.'},
       {name:'Affondi indietro',group:'Gambe',equipment:'Corpo libero',reps:8,notes:'Ripetizioni per lato; usa un appoggio stabile se necessario.'},
-      {name:'Ponte glutei',group:'Gambe',equipment:'Tappetino',reps:12,notes:'Sali in controllo e mantieni il bacino stabile.'},
-      {name:'Calf raise',group:'Gambe',equipment:'Corpo libero',reps:12,notes:'Solleva e abbassa i talloni senza rimbalzi.'},
-      {name:'Rematore con manubri',group:'Parte alta',equipment:'Manubri',reps:10,notes:'Scegli il carico prima di salvare la scheda.'},
-      {name:'Push-up su appoggio',group:'Parte alta',equipment:'Appoggio stabile',reps:8,notes:'Scegli un’altezza che consenta un movimento controllato.'},
-      {name:'Plank',group:'Core',equipment:'Tappetino',work_seconds:25,notes:'Mantieni una posizione che riesci a controllare.'},
-      {name:'Dead bug',group:'Core',equipment:'Tappetino',reps:8,notes:'Ripetizioni per lato; muovi lentamente braccio e gamba opposti.'},
-      {name:'Bird dog',group:'Core',equipment:'Tappetino',reps:8,notes:'Ripetizioni per lato, senza ruotare il bacino.'}
+      {name:'Ponte glutei',group:'Glutei',equipment:'Corpo libero',reps:12,notes:'Sali in controllo e mantieni il bacino stabile.'},
+      {name:'Calf raise',group:'Polpacci',equipment:'Corpo libero',reps:12,notes:'Solleva e abbassa i talloni senza rimbalzi.'},
+      {name:'Rematore con manubri',group:'Dorso',equipment:'Manubri',reps:10,notes:'Scegli il carico prima di salvare la scheda.'},
+      {name:'Push-up su appoggio',group:'Petto',equipment:'Corpo libero',reps:8,notes:'Scegli un’altezza che consenta un movimento controllato.'},
+      {name:'Plank',group:'Core',equipment:'Corpo libero',work_seconds:25,notes:'Mantieni una posizione che riesci a controllare.'},
+      {name:'Dead bug',group:'Core',equipment:'Corpo libero',reps:8,notes:'Ripetizioni per lato; muovi lentamente braccio e gamba opposti.'},
+      {name:'Bird dog',group:'Core',equipment:'Corpo libero',reps:8,notes:'Ripetizioni per lato, senza ruotare il bacino.'},
+      // Repetition/time values are editable draft fields; loads are always left unset.
+      ...[
+        ['Gambe','Corpo libero',[
+          ['Squat sumo','sumo squat'],['Squat su panca','box squat'],['Affondi in avanti','forward lunge','side'],['Affondi laterali','lateral lunge','side'],['Split squat','affondo statico','side'],['Squat isometrico al muro','wall sit','time']]],
+        ['Gambe','Bilanciere',[
+          ['Back squat','squat bilanciere posteriore'],['Front squat','squat frontale'],['Stacco rumeno con bilanciere','romanian deadlift rdl femorali'],['Good morning','hip hinge femorali'],['Affondi con bilanciere','barbell lunge','side']]],
+        ['Gambe','Manubri',[
+          ['Goblet squat con manubrio','accosciata'],['Squat con manubri','dumbbell squat'],['Affondi camminati con manubri','walking lunge','side'],['Affondi indietro con manubri','reverse lunge','side'],['Split squat bulgaro con manubri','bulgarian split squat','side'],['Stacco rumeno con manubri','romanian deadlift rdl femorali'],['Stacco rumeno a una gamba','single leg rdl','side'],['Step-up con manubri','salita gradino','side']]],
+        ['Gambe','Macchine',[
+          ['Leg press a 45°','pressa gambe'],['Leg press orizzontale','pressa seduta'],['Leg press a una gamba','pressa monopodalica','side'],['Squat al multipower','smith machine'],['Hack squat','hack machine'],['Leg extension','quadricipiti'],['Leg curl seduto','femorali'],['Leg curl sdraiato','lying leg curl femorali'],['Leg curl in piedi','standing leg curl','side'],['Adductor machine','adduttori interno coscia'],['Abductor machine','abduttori esterno coscia']]],
+        ['Gambe','Kettlebell',[
+          ['Goblet squat con kettlebell','accosciata'],['Stacco con kettlebell','kettlebell deadlift'],['Affondi con kettlebell','kettlebell lunge','side']]],
+        ['Gambe','Step',[
+          ['Step-up','salita gradino','side'],['Step-down','discesa gradino','side'],['Step-up laterale','salita laterale','side']]],
+        ['Gambe','Fitball',[
+          ['Leg curl su fitball','swiss ball hamstring curl'],['Squat al muro con fitball','wall squat']]],
+        ['Glutei','Corpo libero',[
+          ['Ponte glutei a una gamba','single leg glute bridge','side'],['Frog pump','ponte a farfalla'],['Slanci posteriori in quadrupedia','donkey kick','side'],['Abduzioni sul fianco','side lying leg raise','side'],['Fire hydrant','abduzione in quadrupedia','side']]],
+        ['Glutei','Bilanciere',[
+          ['Hip thrust con bilanciere','spinta anca'],['Glute bridge con bilanciere','ponte glutei carico'],['Stacco sumo con bilanciere','sumo deadlift']]],
+        ['Glutei','Manubri',[
+          ['Hip thrust con manubrio','spinta anca panca'],['Glute bridge con manubrio','ponte glutei carico']]],
+        ['Glutei','Cavi',[
+          ['Kickback al cavo','slancio posteriore glutei','side'],['Pull-through al cavo','estensione anca'],['Abduzione anca al cavo','slancio laterale','side']]],
+        ['Glutei','Elastici',[
+          ['Camminata laterale con miniband','lateral band walk','side'],['Monster walk','camminata elastico'],['Clamshell con elastico','conchiglia anca','side'],['Ponte glutei con miniband','banded bridge']]],
+        ['Glutei','Macchine',[
+          ['Glute machine','macchina glutei','side'],['Hip thrust alla macchina','glute drive']]],
+        ['Polpacci','Corpo libero',[
+          ['Calf raise a una gamba','single leg calf','side'],['Tibialis raise al muro','tibiale anteriore']]],
+        ['Polpacci','Manubri',[
+          ['Calf raise con manubri','standing calf'],['Calf raise seduto con manubrio','soleo']]],
+        ['Polpacci','Macchine',[
+          ['Calf raise alla macchina in piedi','standing calf machine'],['Calf raise alla macchina seduto','seated calf soleo'],['Calf press alla pressa','polpacci leg press']]],
+        ['Petto','Corpo libero',[
+          ['Push-up','piegamenti flessioni'],['Push-up sulle ginocchia','knee push up'],['Push-up con piedi rialzati','decline push up']]],
+        ['Petto','Bilanciere',[
+          ['Panca piana con bilanciere','bench press'],['Panca inclinata con bilanciere','incline bench press'],['Floor press con bilanciere','distensioni a terra']]],
+        ['Petto','Manubri',[
+          ['Panca piana con manubri','dumbbell bench press'],['Panca inclinata con manubri','incline press'],['Floor press con manubri','distensioni a terra'],['Croci su panca piana','dumbbell fly'],['Croci su panca inclinata','incline fly'],['Pullover con manubrio','dumbbell pullover']]],
+        ['Petto','Cavi',[
+          ['Croci ai cavi alti','cable crossover'],['Croci ai cavi bassi','low cable fly'],['Chest press ai cavi','spinte petto']]],
+        ['Petto','Macchine',[
+          ['Chest press alla macchina','spinte petto seduto'],['Chest press inclinata','incline machine press'],['Pec deck','pectoral machine butterfly croci']]],
+        ['Dorso','Sbarra e parallele',[
+          ['Trazioni presa prona','pull up'],['Trazioni presa supina','chin up'],['Trazioni scapolari','scapular pull up']]],
+        ['Dorso','Macchine',[
+          ['Trazioni assistite alla macchina','assisted pull up'],['Lat machine presa larga','lat pulldown'],['Lat machine presa neutra','neutral pulldown'],['Lat machine presa supina','reverse pulldown'],['Rematore alla macchina','row machine'],['Pullover alla macchina','pullover machine'],['Back extension alla macchina','estensioni lombari']]],
+        ['Dorso','Cavi',[
+          ['Pulley basso','seated cable row'],['Rematore al cavo a un braccio','single arm row','side'],['Pulldown a braccia tese','straight arm pulldown'],['Rematore al cavo alto','high cable row']]],
+        ['Dorso','Bilanciere',[
+          ['Rematore con bilanciere','bent over row'],['Rematore landmine','t bar row'],['Stacco da terra','deadlift']]],
+        ['Dorso','Manubri',[
+          ['Rematore a un braccio su panca','one arm dumbbell row','side'],['Rematore su panca inclinata','chest supported row']]],
+        ['Dorso','TRX',[
+          ['Rematore al TRX','suspension row'],['Rematore alto al TRX','high row']]],
+        ['Dorso','Elastici',[
+          ['Rematore con elastico','band row'],['Pulldown con elastico','band lat pull'],['Pull-apart con elastico','band pull apart']]],
+        ['Spalle','Manubri',[
+          ['Shoulder press con manubri','lento avanti distensioni'],['Arnold press','rotazione distensioni'],['Alzate laterali con manubri','lateral raise'],['Alzate frontali con manubri','front raise'],['Alzate posteriori su panca','reverse fly deltoidi posteriori']]],
+        ['Spalle','Bilanciere',[
+          ['Military press','overhead press lento avanti'],['Landmine press a un braccio','spinte angolate','side']]],
+        ['Spalle','Cavi',[
+          ['Alzate laterali al cavo','cable lateral raise','side'],['Face pull','tirate al viso deltoidi posteriori'],['Croci inverse ai cavi','reverse cable fly'],['Extrarotazioni al cavo','rotazione esterna spalla','side']]],
+        ['Spalle','Macchine',[
+          ['Shoulder press alla macchina','spinte spalle'],['Reverse pec deck','croci inverse posteriori'],['Alzate laterali alla macchina','lateral raise machine']]],
+        ['Spalle','Elastici',[
+          ['Extrarotazioni con elastico','rotazione esterna spalla','side'],['Face pull con elastico','band face pull']]],
+        ['Spalle','Corpo libero',[
+          ['Pike push-up','piegamenti spalle'],['Scapular push-up','piegamenti scapolari']]],
+        ['Bicipiti','Manubri',[
+          ['Curl alternato con manubri','dumbbell curl','side'],['Hammer curl','curl a martello'],['Curl su panca inclinata','incline curl'],['Curl concentrato','concentration curl','side'],['Curl spider con manubri','spider curl']]],
+        ['Bicipiti','Bilanciere',[
+          ['Curl con bilanciere dritto','barbell curl'],['Curl con bilanciere EZ','ez bar curl'],['Curl inverso con bilanciere','reverse curl avambracci']]],
+        ['Bicipiti','Cavi',[
+          ['Curl al cavo basso','cable curl'],['Curl con corda al cavo','rope hammer curl'],['Curl al cavo a un braccio','single arm curl','side']]],
+        ['Bicipiti','Macchine',[
+          ['Curl Scott alla macchina','preacher curl panca scott'],['Curl alla macchina','biceps machine']]],
+        ['Bicipiti','Elastici',[
+          ['Curl con elastico','band biceps curl']]],
+        ['Tricipiti','Cavi',[
+          ['Pushdown con corda','rope triceps extension'],['Pushdown con barra','straight bar push down'],['Estensioni sopra la testa al cavo','overhead triceps extension'],['Estensioni al cavo a un braccio','single arm pushdown','side']]],
+        ['Tricipiti','Manubri',[
+          ['French press con manubri','lying triceps extension'],['Estensioni sopra la testa con manubrio','overhead extension'],['Kickback con manubrio','triceps kick back','side']]],
+        ['Tricipiti','Bilanciere',[
+          ['French press con bilanciere EZ','skull crusher'],['Panca presa stretta','close grip bench press']]],
+        ['Tricipiti','Sbarra e parallele',[
+          ['Dip alle parallele','parallel bar dip']]],
+        ['Tricipiti','Macchine',[
+          ['Dip assistiti alla macchina','assisted dip'],['Triceps extension alla macchina','estensioni tricipiti']]],
+        ['Tricipiti','Corpo libero',[
+          ['Push-up presa stretta','close grip push up']]],
+        ['Core','Corpo libero',[
+          ['Side plank','plank laterale','time-side'],['Plank su braccia tese','high plank','time'],['Plank con tocco delle spalle','shoulder tap','side'],['Crunch','addominali'],['Crunch inverso','reverse crunch'],['Bicycle crunch','addominali bicicletta','side'],['Hollow hold','tenuta addominale','time'],['Sollevamento gambe da terra','leg raise'],['Mountain climber','scalatore','time'],['Heel touch','tocco talloni','side'],['Bear plank','plank orso','time']]],
+        ['Core','Cavi',[
+          ['Pallof press al cavo','anti rotazione','side'],['Woodchop al cavo','taglialegna','side'],['Crunch al cavo','cable crunch']]],
+        ['Core','Elastici',[
+          ['Pallof press con elastico','anti rotazione','side']]],
+        ['Core','Fitball',[
+          ['Plank su fitball','stabilita','time'],['Crunch su fitball','swiss ball crunch'],['Stir the pot','cerchi su fitball','time']]],
+        ['Core','TRX',[
+          ['Plank al TRX','suspension plank','time'],['Knee tuck al TRX','raccolta ginocchia']]],
+        ['Core','Sbarra e parallele',[
+          ['Sollevamento ginocchia alla sbarra','hanging knee raise'],['Sollevamento ginocchia alle parallele','captain chair']]],
+        ['Core','Macchine',[
+          ['Crunch alla macchina','abdominal machine']]],
+        ['Total body','Manubri',[
+          ['Farmer carry con manubri','camminata del contadino','time'],['Suitcase carry','camminata unilaterale','time-side'],['Thruster con manubri','squat e distensione']]],
+        ['Total body','Kettlebell',[
+          ['Kettlebell swing','slancio'],['Farmer carry con kettlebell','camminata del contadino','time']]],
+        ['Total body','Palla medica',[
+          ['Slam con palla medica','medicine ball slam'],['Squat con palla medica','medicine ball squat']]],
+        ['Total body','Corpo libero',[
+          ['Burpee senza salto','step back burpee'],['Bear crawl','camminata orso','time'],['Inchworm','camminata con le mani']]],
+        ['Mobilità','Corpo libero',[
+          ['Cat-cow','gatto mucca colonna'],['Rotazioni toraciche in quadrupedia','thread the needle','side'],['Mobilità anca 90/90','hip switch','side'],['Mobilità caviglia al muro','knee to wall','side'],['Affondo con rotazione toracica','world greatest stretch','side'],['Wall slide','scivolamenti al muro spalle'],['Circonduzioni delle spalle','shoulder circles'],['Rock-back adduttori','adductor rockback','side']]]
+      ].flatMap(([group,equipment,entries])=>entries.map(([name,aliases,mode])=>({name,aliases,group,equipment,sets:2,rest_seconds:60,
+        ...(mode?.startsWith('time')?{work_seconds:30}:{reps:10}),
+        notes:mode?.includes('side')?(mode.startsWith('time')?'Durata indicata per lato.':'Ripetizioni indicate per lato.'):'',
+      })))
     ];
-    const libraryPicker=el('details',null,'exercise-catalogue');libraryPicker.append(el('summary','Sfoglia gli esercizi'));
-    const catalogueSearch=inputField(libraryPicker,'Cerca esercizio, gruppo o attrezzo','exercise_search','search',{placeholder:'Es. core, gambe, manubri'}),catalogueRows=el('div',null,'exercise-catalogue-grid');libraryPicker.append(catalogueRows);
-    function drawCatalogue(){const query=catalogueSearch.value.toLocaleLowerCase('it-IT');catalogueRows.replaceChildren();for(const exercise of catalogue.filter(e=>`${e.name} ${e.group} ${e.equipment}`.toLocaleLowerCase('it-IT').includes(query))){const item=el('article');item.append(el('strong',exercise.name),el('small',`${exercise.group} · ${exercise.equipment}`),button('Aggiungi',()=>{addExercise(exercise);form.dataset.dirty='true';},'outline'));catalogueRows.append(item);}if(!catalogueRows.children.length)catalogueRows.append(el('p','Nessuna corrispondenza. Puoi aggiungere un esercizio personalizzato.','caption'));}
-    catalogueSearch.addEventListener('input',drawCatalogue);drawCatalogue();gym.append(libraryPicker,button('+ Aggiungi esercizio',()=>addExercise(),'outline'));form.append(gym);
+    const libraryPicker=el('details',null,'exercise-catalogue');libraryPicker.append(el('summary',`Sfoglia i ${catalogue.length} esercizi`));
+    libraryPicker.append(el('p','Scegli gli esercizi e personalizza serie, ripetizioni o durata, recuperi e carichi. I valori iniziali sono una bozza modificabile.','caption'));
+    const filters=el('div',null,'exercise-catalogue-filters');
+    const catalogueSearch=inputField(filters,'Cerca esercizio o nome inglese','exercise_search','search',{placeholder:'Es. panca manubri, leg press, core'});
+    const options=key=>[...new Set(catalogue.map(e=>e[key]))].sort((a,b)=>a.localeCompare(b,'it'));
+    const muscle=choice(filters,'Gruppo muscolare','exercise_group',[['','Tutti i gruppi'],...options('group').map(v=>[v,v])]);
+    const equipment=choice(filters,'Attrezzatura','exercise_equipment',[['','Tutte le attrezzature'],...options('equipment').map(v=>[v,v])]);libraryPicker.append(filters);
+    const toolbar=el('div',null,'exercise-catalogue-toolbar'),catalogueCount=el('p','','caption');catalogueCount.setAttribute('role','status');
+    toolbar.append(catalogueCount,button('Azzera filtri',()=>{catalogueSearch.value='';muscle.value='';equipment.value='';drawCatalogue(true);catalogueSearch.focus();},'text-button'));libraryPicker.append(toolbar);
+    const catalogueRows=el('div',null,'exercise-catalogue-grid'),catalogueFeedback=el('p','','exercise-catalogue-feedback');catalogueFeedback.setAttribute('role','status');
+    let visibleExercises=24;
+    const moreExercises=button('Mostra altri 24 esercizi',()=>{visibleExercises+=24;drawCatalogue();},'outline');
+    libraryPicker.append(catalogueRows,moreExercises,catalogueFeedback);
+    const normalize=text=>text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('it-IT').replace(/[^a-z0-9]+/g,' ').trim();
+    function drawCatalogue(reset=false){
+      if(reset)visibleExercises=24;
+      const words=normalize(catalogueSearch.value).split(' ').filter(Boolean);
+      const found=catalogue.filter(e=>(!muscle.value||e.group===muscle.value)&&(!equipment.value||e.equipment===equipment.value)&&words.every(word=>normalize(`${e.name} ${e.aliases||''} ${e.group} ${e.equipment}`).includes(word)));
+      const shown=found.slice(0,visibleExercises);catalogueRows.replaceChildren();
+      for(const exercise of shown){
+        const item=el('article');item.append(el('strong',exercise.name),el('small',`${exercise.group} · ${exercise.equipment}`));
+        if(exercise.work_seconds)item.append(el('span','A tempo','exercise-mode-tag'));
+        const added=el('small','','exercise-added');
+        const add=button('Aggiungi',()=>{
+          const blank=exerciseList.children.length===1?exerciseList.firstElementChild:null;
+          if(blank&&!blank.dataset.edited&&!blank.querySelector('[name=exercise_name]').value.trim())blank.remove();
+          if(!addExercise(exercise)){added.textContent='Limite di 30 esercizi raggiunto.';catalogueFeedback.textContent='Hai raggiunto 30 esercizi. Rimuovine uno dalla scheda prima di aggiungerne altri.';return;}
+          form.dataset.dirty='true';added.textContent='Aggiunto alla scheda';catalogueFeedback.textContent=`${exercise.name} aggiunto alla scheda · ${exerciseList.children.length}/30 esercizi.`;
+        },'outline');add.setAttribute('aria-label',`Aggiungi ${exercise.name} alla scheda`);item.append(add,added);catalogueRows.append(item);
+      }
+      catalogueCount.textContent=`${found.length} esercizi trovati su ${catalogue.length} · ${shown.length} visibili`;
+      moreExercises.hidden=shown.length>=found.length;
+      if(!found.length)catalogueRows.append(el('p','Nessuna corrispondenza. Azzera i filtri oppure aggiungi un esercizio personalizzato.','empty-state'));
+    }
+    catalogueSearch.addEventListener('input',()=>drawCatalogue(true));muscle.addEventListener('change',()=>drawCatalogue(true));equipment.addEventListener('change',()=>drawCatalogue(true));drawCatalogue();
+    gym.insertBefore(libraryPicker,exerciseList);gym.append(button('+ Aggiungi esercizio',()=>{if(!addExercise())catalogueFeedback.textContent='Hai raggiunto il limite di 30 esercizi per scheda.';},'outline'));form.append(gym);
     function prepareGym(title,exercises,minutes=30){sport.value='strength';sport.dispatchEvent(new Event('change'));name.value=title;duration.value=minutes;rpe.value=4;date.value=today();purpose.value='Forza di supporto';exerciseList.replaceChildren();for(const exercise of exercises)addExercise(exercise);form.dataset.dirty='true';card.scrollIntoView?.({behavior:'smooth',block:'start'});name.focus();}
 
     sport.addEventListener('change', () => { const strength = sport.value === 'strength'; gym.hidden = !strength; gym.disabled = !strength; aerobic.hidden = strength; aerobic.disabled = strength; if (strength && !exerciseList.children.length) addExercise(); });
     const status = el('p', '', 'manual-training-status'); status.setAttribute('role', 'status');
     const submit = el('button', 'Salva nel piano', 'primary'); submit.type = 'submit'; form.append(status, submit); card.append(form); container.append(card);
-    form.addEventListener('input', () => { form.dataset.dirty = 'true'; });
+    form.addEventListener('input', event => { if(!event.target.closest('.exercise-catalogue'))form.dataset.dirty = 'true'; });
     form.addEventListener('submit', event => {
       event.preventDefault(); if (!form.reportValidity()) return;
       // Capture before the shared action disables form controls.
@@ -115,6 +268,7 @@
           const result = await api('/training/manual', { method: 'POST', body: JSON.stringify(value) });
           delete form.dataset.dirty;
           form.reset(); date.value = today(); sport.dispatchEvent(new Event('change')); phaseList.replaceChildren(); exerciseList.replaceChildren();
+          drawCatalogue(true);catalogueFeedback.textContent='';
           status.replaceChildren(el('strong', 'Seduta salvata nel piano.'));
           for (const warning of result.warnings || []) status.append(el('span', warning, 'manual-warning'));
           await ui.load(); await refreshLibrary();

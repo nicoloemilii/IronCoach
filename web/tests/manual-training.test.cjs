@@ -76,12 +76,40 @@ test('gym templates create editable drafts without writing or changing existing 
 
 test('gym catalogue search and exercise reordering preserve exact exercise configuration',async t=>{
   const {w,$,fill,flush,click}=await setup(t);fill('sport','strength');$('[name=sport]').dispatchEvent(new w.Event('change'));
+  fill('exercise_name','Esercizio personalizzato');
   fill('exercise_search','Dead bug');assert.equal($('.exercise-catalogue-grid').children.length,1);
   $('.exercise-catalogue-grid button').click();await flush();assert.equal($('.gym-builder-list').children.length,2);
   const row=$('.gym-builder-list').lastElementChild;assert.equal(row.querySelector('[name=exercise_name]').value,'Dead bug');
   [...row.querySelectorAll('button')].find(n=>n.textContent==='Sposta su').click();
   assert.equal($('.gym-builder-list').firstElementChild.querySelector('[name=exercise_name]').value,'Dead bug');
   assert.equal($('.gym-builder-list').firstElementChild.querySelector('[name=exercise_reps]').value,'8');
+});
+
+test('expanded catalogue combines muscle, equipment and alias search and paginates without modifying the draft',async t=>{
+  const {w,$,fill,calls}=await setup(t);assert.match($('.exercise-catalogue summary').textContent,/201 esercizi/);
+  $('[name=sport]').value='strength';$('[name=sport]').dispatchEvent(new w.Event('change'));
+  const group=$('[name=exercise_group]'),equipment=$('[name=exercise_equipment]');assert.equal(group.options.length,12);assert.equal(equipment.options.length,13);
+  assert.equal($('.exercise-catalogue-grid').children.length,24);
+  const more=[...$('.exercise-catalogue').querySelectorAll('button')].find(b=>b.textContent==='Mostra altri 24 esercizi');more.click();assert.equal($('.exercise-catalogue-grid').children.length,48);
+  group.value='Petto';group.dispatchEvent(new w.Event('change'));equipment.value='Manubri';equipment.dispatchEvent(new w.Event('change'));fill('exercise_search','DUMBBELL BENCH');
+  assert.equal($('.exercise-catalogue-grid').children.length,1);assert.match($('.exercise-catalogue-grid').textContent,/Panca piana con manubri/);
+  fill('exercise_search','nessuna corrispondenza');assert.match($('.exercise-catalogue-grid').textContent,/Azzera i filtri/);assert.equal(more.hidden,true);
+  [...$('.exercise-catalogue-toolbar').querySelectorAll('button')][0].click();assert.equal(group.value,'');assert.equal(equipment.value,'');assert.equal($('.exercise-catalogue-grid').children.length,24);
+  fill('exercise_search','mobilita caviglia');assert.match($('.exercise-catalogue-grid').textContent,/Mobilità caviglia/);assert.equal($('#manual-training-form').dataset.dirty,undefined);assert.equal(calls.some(c=>c.method!=='GET'),false);
+});
+
+test('catalogue inserts a timed exercise into the pristine row and saves editable fields without catalogue metadata',async t=>{
+  const {w,$,fill,submit,flush,calls}=await setup(t);fill('sport','strength');$('[name=sport]').dispatchEvent(new w.Event('change'));fill('name','La mia scheda');
+  fill('exercise_search','Side plank');$('.exercise-catalogue-grid button').click();assert.equal($('.gym-builder-list').children.length,1);assert.equal($('[name=exercise_mode]').value,'time');assert.equal($('[name=exercise_seconds]').value,'30');assert.match($('[name=exercise_notes]').value,/per lato/);
+  fill('exercise_sets','4');fill('exercise_seconds','40');fill('exercise_rest','75');submit();await flush();
+  const saved=calls.find(c=>c.method==='POST').value.exercises;assert.equal(saved.length,1);assert.equal(saved[0].name,'Side plank');assert.equal(saved[0].sets,4);assert.equal(saved[0].work_seconds,40);assert.equal(saved[0].reps,null);assert.equal(saved[0].weight_kg,null);assert.equal(saved[0].rest_seconds,75);assert.equal(saved[0].group,undefined);
+  assert.equal($('[name=exercise_search]').value,'');assert.equal($('.exercise-catalogue-grid').children.length,24);
+});
+
+test('catalogue preserves edited blank rows and explains the 30 exercise limit without losing selections',async t=>{
+  const {w,$,fill}=await setup(t);fill('sport','strength');$('[name=sport]').dispatchEvent(new w.Event('change'));fill('exercise_sets','5');fill('exercise_search','Dead bug');
+  const add=$('.exercise-catalogue-grid button');add.click();assert.equal($('.gym-builder-list').children.length,2);assert.equal($('.gym-builder-list').firstElementChild.querySelector('[name=exercise_sets]').value,'5');
+  for(let i=0;i<29;i++)add.click();assert.equal($('.gym-builder-list').children.length,30);assert.match($('.exercise-catalogue-feedback').textContent,/30 esercizi/);assert.equal($('.gym-builder-list').firstElementChild.querySelector('[name=exercise_sets]').value,'5');
 });
 
 test('manual builder captures all inputs before controls are disabled and persists to calendar', async t => {
