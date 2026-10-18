@@ -55,11 +55,11 @@ Ripristino: `python -m app.commercial.cli restore --input /percorso/iron-coach.e
 
 ## Verifiche e limiti del rilascio
 
-- 617 test backend, inclusi 37 nuovi controlli di account, identità, isolamento, CSRF, sessioni, recupero, pagamenti, backup/ripristino e cancellazione.
+- 619 test backend, inclusi 39 nuovi controlli di account, identità, isolamento, CSRF, sessioni, recupero, pagamenti, backup/ripristino e cancellazione.
 - 144 test frontend, inclusi moduli di accesso, consenso, token transitori, protezione delle richieste e prezzo restituito dal server.
 - Prova integrata su FastAPI reale e JSDOM isolati: due account, 56 richieste, nessun errore imprevisto, rifiuto atteso di una richiesta con sessione precedente, scheda palestra e progresso persistiti, esportazione isolata.
 - Audit delle dipendenze runtime Python e test npm senza vulnerabilità note alla verifica. È una fotografia delle banche dati degli audit, non una garanzia di assenza di vulnerabilità. Le dipendenze test npm non entrano nell’immagine.
-- CI per Windows/Linux, audit e build Docker predisposti. Docker Engine/Compose utilizzabili e verifica visiva nel browser non erano disponibili qui: build e layout non sono dichiarati collaudati. I test dei servizi Stripe/SMTP/Intervals non hanno usato conti di produzione.
+- CI per Windows/Linux, audit e build Docker predisposti. La build Docker e i controlli Linux sono stati verificati su GitHub; la verifica Windows viene ripetuta sulla revisione finale. Docker Engine/Compose utilizzabili e verifica visiva nel browser non erano disponibili sulla macchina locale. I test dei servizi Stripe/SMTP/Intervals non hanno usato conti di produzione.
 
 Prima della vendita pubblica rimangono collaudo sul dominio con TLS, email e Stripe reali in test mode, prova di carico e recupero operativo sul servizio scelto, revisione indipendente della sicurezza, documenti/ruoli/conservazione dei dati del titolare e verifica delle licenze e del marchio commerciale. Le funzioni di coaching mantengono i limiti delle versioni precedenti.
 

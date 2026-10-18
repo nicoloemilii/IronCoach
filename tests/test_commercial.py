@@ -291,11 +291,33 @@ def test_remote_detail_workers_keep_workspace_context_and_cache_boundaries(hoste
 def test_hosted_scheduler_binds_each_active_account_and_never_uses_global_provider_credentials(hosted,monkeypatch):
     from app.services import sync_jobs
     from threading import Event
-    _,store,_,signup,_=hosted;signup();signup('second@example.test');seen=[]
+    _,store,_,signup,_=hosted;first=signup();second=signup('second@example.test');seen=[]
+    # Schema creation is covered separately; do not make scheduler timing depend
+    # on first-run filesystem and antivirus costs on Windows CI.
+    assert first.get('/planning/profile').status_code==second.get('/planning/profile').status_code==200
     monkeypatch.setenv('IRON_AUTO_SYNC','1');monkeypatch.setattr(sync_jobs,'STOP',Event());monkeypatch.setattr(sync_jobs,'THREAD',None)
     def tick():
         from app.integrations.intervals_credentials import credentials
         assert credentials()['api_key']=='';seen.append(database.WORKSPACE.get())
         if len(seen)==2:sync_jobs.STOP.set()
-    monkeypatch.setattr(sync_jobs,'automatic_tick',tick);sync_jobs.start_hosted(store);sync_jobs.THREAD.join(timeout=5);sync_jobs.STOP.set()
+    monkeypatch.setattr(sync_jobs,'automatic_tick',tick);sync_jobs.start_hosted(store)
+    try:sync_jobs.THREAD.join(timeout=20)
+    finally:sync_jobs.STOP.set();sync_jobs.THREAD.join(timeout=10)
+    assert not sync_jobs.THREAD.is_alive()
     assert len(seen)==2 and len(set(seen))==2 and all(seen)
+
+
+@pytest.mark.parametrize('same_account',[True,False])
+def test_mutations_only_block_the_same_athlete(same_account):
+    import asyncio
+    from starlette.requests import Request
+    from starlette.responses import Response
+    from app.commercial.mutations import guard_mutations
+    def request(identifier):return Request({'type':'http','method':'POST','path':'/training/manual','scheme':'https','server':('product.test',443),'query_string':b'','headers':[], 'state':{'account':{'id':identifier}}})
+    async def run():
+        entered=asyncio.Event();release=asyncio.Event()
+        async def slow(_):entered.set();await release.wait();return Response(status_code=200)
+        first=asyncio.create_task(guard_mutations(request('a'),slow,True));await entered.wait()
+        second=await guard_mutations(request('a' if same_account else 'b'),lambda _:asyncio.sleep(0,result=Response(status_code=200)),True)
+        release.set();assert (await first).status_code==200;assert second.status_code==(409 if same_account else 200)
+    asyncio.run(run())

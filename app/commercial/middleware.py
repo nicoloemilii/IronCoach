@@ -97,7 +97,10 @@ class ProductBoundary:
             await JSONResponse({'detail':error.detail},error.status_code,headers=error.headers)(scope,receive,protected_send)
         except Exception as error:
             if response_started: raise
-            logger.error(json.dumps({'request_id':identifier,'error_type':type(error).__name__}))
+            import traceback
+            from pathlib import Path
+            frames=[{'file':Path(frame.filename).name,'function':frame.name,'line':frame.lineno} for frame in traceback.extract_tb(error.__traceback__)[-8:]]
+            logger.error(json.dumps({'request_id':identifier,'error_type':type(error).__name__,'frames':frames}))
             await JSONResponse({'detail':'Operazione non completata. Riprova e comunica al supporto il codice richiesta.','request_id':identifier},500)(scope,receive,protected_send)
         finally:
             WORKSPACE.reset(workspace_token);WORKSPACE_KEY.reset(key_token)

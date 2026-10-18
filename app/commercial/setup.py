@@ -10,6 +10,11 @@ from app.commercial import routes, billing
 
 
 def install(app,settings=None,folder=None):
+    import logging
+    logger=logging.getLogger('iron.requests')
+    if not logger.handlers:
+        handler=logging.StreamHandler();handler.setFormatter(logging.Formatter('%(message)s'));logger.addHandler(handler)
+    logger.setLevel(logging.INFO);logger.propagate=False
     from app.db import database
     cfg=(settings or from_env()).validate()
     app.state.settings=cfg;app.state.accounts=Store(folder or database.DATA_DIR,cfg) if cfg.hosted else None
