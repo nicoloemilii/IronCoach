@@ -236,7 +236,7 @@ test('weekly cards sum recorded ascent and open judgment with prior comparable w
   const {$,data,flush}=await setup(t);
   data.week={hours:8,activities:6,elevation_m:null,elevation_known_m:750,elevation_missing_activities:2,load:391};
   data.week_history=[{start:'2026-10-05',end:'2026-10-10',hours:9,activities:7,elevation_m:900,load:430}];
-  const judgment={scope:'recorded_training',tone:'good',judgment:'Carico coerente con lo storico',explanation:'Carico stabile nei dati registrati.',actions:['Mantieni il piano.']};
+  const judgment={scope:'recorded_training',tone:'good',judgment:'Carico coerente con lo storico',reference:400,explanation:'Carico stabile nei dati registrati.',actions:['Mantieni il piano.']};
   data.week_assessments={load:judgment};data.homeCoach={...coachFixture(),training_assessment:judgment};
   $('#refresh').click();await flush();
   assert.match($('#home-week').children[2].textContent,/750 m/);assert.doesNotMatch($('#home-week').children[2].textContent,/parziale|≥/);
@@ -454,12 +454,12 @@ test('activity and goal errors reset a previous favorable color and leave an exp
     return original(url, options);
   };
   $('#refresh').click(); await flush();
-  $('#activity-list button').click(); await flush(); assert.equal($('#activity-detail').dataset.tone, 'good');
+  $('#activity-list button').click(); await flush(); assert.equal($('#activity-detail .activity-coach').dataset.tone, 'good');
   $('#close-activity').click();
   const gapButton = [...w.document.querySelectorAll('#race-goal-list button')].find(n => n.textContent === 'Vedi preparazione');
   gapButton.click(); await flush(); assert.equal($('.gap-result').dataset.tone, 'good');
   failing = true;
-  $('#activity-list button').click(); await flush(); assert.equal($('#activity-detail').dataset.tone, 'unknown');
+  $('#activity-list button').click(); await flush(); assert.equal($('#activity-detail .activity-coach').dataset.tone, 'unknown');
   assert.match($('#activity-detail').textContent, /Valutazione non disponibile/); $('#close-activity').click();
   gapButton.click(); await flush(); assert.equal($('.gap-result').dataset.tone, 'unknown');
   assert.match($('.gap-result').textContent, /Analisi non disponibile/);
@@ -723,4 +723,27 @@ test('health cards open charts with their own four-week range and preserve custo
 
 test('Coach navigation offers a back arrow to the originating section',async t=>{
  const {$,flush}=await setup(t);$('#today .coach-flash [data-page="coach"]').click();await flush();assert.equal($('#coach').hidden,false);$('#coach-back').click();assert.equal($('#today').hidden,false);
+});
+
+
+test('weekly chart has one reference and equal fully saturated colors for equal values',async t=>{
+ const {$,data,flush}=await setup(t);data.week={hours:8.3,activities:6,elevation_m:0,load:391};
+ data.week_history=[{start:'2026-10-05',end:'2026-10-11',hours:8.3,activities:6,elevation_m:0,load:434},{start:'2026-09-28',end:'2026-10-04',hours:6.2,activities:4,elevation_m:0,load:300}];
+ data.week_assessments={hours:{tone:'critical',judgment:'Volume alto',reference:5.4,explanation:'Aumento documentato.',actions:['Alleggerisci.']},load:{tone:'critical',judgment:'Carico alto',reference:260,explanation:'Aumento documentato.'}};
+ $('#refresh').click();await flush();$('#home-week').children[0].querySelector('button').click();await flush();
+ const bars=[...$('#metric-detail .weekly-chart').querySelectorAll('rect[data-value]')];assert.equal(bars.at(-1).getAttribute('fill'),bars.at(-2).getAttribute('fill'));assert.ok(bars.every(bar=>bar.getAttribute('opacity')==='1'));
+ assert.equal($('#metric-detail .weekly-chart').querySelectorAll('.reference-line').length,1);assert.match($('#metric-detail .weekly-chart').textContent,/2,5/);assert.match($('#metric-detail .weekly-chart').textContent,/7,5/);assert.match($('#metric-detail .chart-comparison').textContent,/5,4 ore/);
+ $('#close-metric').click();$('#home-week').children[3].querySelector('button').click();await flush();const loads=[...$('#metric-detail .weekly-chart').querySelectorAll('rect[data-value]')];assert.equal(loads.at(-1).getAttribute('fill'),loads.at(-2).getAttribute('fill'));
+});
+
+test('health hides manual and context-only metrics and places range controls before plot',async t=>{
+ const {w,$,flush}=await setup(t);const original=w.fetch;
+ w.fetch=async(url,opts)=>{const response=await original(url,opts);if(!String(url).startsWith('/health/metrics'))return response;const value=await response.json();value.metrics.push(...['stress_score','daily_activity_load','daily_ctl_load','daily_atl_load','body_battery_min','body_battery_max','steps'].map(kind=>({kind,label:'Contesto '+kind,unit:'punti',points:[],latest:null})),{kind:'weight_kg',label:'Peso',unit:'kg',latest:{value:65,date:'2026-10-17',source:'intervals'},points:[{value:65,date:'2026-10-17',source:'intervals'}]});return {ok:true,json:async()=>value};};
+ $('#refresh').click();await flush();assert.doesNotMatch($('#health-metrics').textContent,/Contesto/);assert.match($('#health-metrics').textContent,/Peso/);
+ $('#health-metrics .metric-open').click();await flush();assert.equal($('#metric-detail').firstElementChild.className,'chart-range');assert.equal($('#metric-detail').children[1].classList.contains('chart-panel'),true);
+});
+
+test('one plan navigation entry contains both calendar and editable goals',async t=>{
+ const {$,flush}=await setup(t);assert.equal($('nav [data-page="goal"]'),null);$('nav [data-page="calendar"]').click();await flush();
+ assert.equal($('#calendar').hidden,false);assert.equal($('#goal').hidden,true);$('[data-plan-tab="goal"]').click();assert.equal($('#goal').hidden,false);assert.equal($('#plan-calendar-panel').hidden,true);assert.ok($('#goal-form'));$('[data-plan-tab="calendar"]').click();assert.equal($('#plan-calendar-panel').hidden,false);
 });

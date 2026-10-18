@@ -221,6 +221,16 @@ def _latest(db: Session, start: date):
     return db.query(PlanRevision).filter(PlanRevision.week_start == start.isoformat()).order_by(PlanRevision.version.desc()).first()
 
 
+def _has_generated_plan(db: Session, start: date) -> bool:
+    # A manually added or moved session is an audit revision, not an automatically
+    # generated week. Undoing the original generation also restores that distinction.
+    return db.query(PlanRevision.id).filter(
+        PlanRevision.week_start == start.isoformat(),
+        PlanRevision.action.in_(['generate', 'regenerate']),
+        PlanRevision.undone_at.is_(None),
+    ).first() is not None
+
+
 def _audit(db: Session, start: date, action: str, before: list, metadata: dict) -> PlanRevision:
     latest = _latest(db, start)
     row = PlanRevision(week_start=start.isoformat(), version=(latest.version + 1 if latest else 1), action=action, snapshot_json=_dump(before), metadata_json=_dump(metadata))
@@ -524,7 +534,7 @@ def get_week(db: Session, value=None) -> dict:
     needs_review = bool(revision and (goal_changed or metadata.get("profile_revision") != get_settings(db)["revision"] or metadata.get("feedback_adaptation", capacity["feedback"]) != capacity["feedback"] or capacity["limit"] < metadata.get("target_minutes", 0)))
     if revision and goal_changed:
         reasons.append('Le specifiche dell’obiettivo sono cambiate: rivedi e ricalcola le sedute future; quelle esistenti non vengono riscritte automaticamente.')
-    return {"start": start.isoformat(), "end": (start + timedelta(days=6)).isoformat(), "version": revision.version if revision else 0, "generated": revision is not None, "days": days, "summary": summary, "total_minutes": total, "target_minutes": metadata.get("target_minutes", min(profile["weekly_minutes"], capacity["limit"])), "confidence": metadata.get("confidence", capacity["confidence"]), "phase": capacity["phase"], "rationale": reasons, "adaptation_mode": "conservative_aerobic", "allocation": metadata.get("allocation", capacity["allocation"]), "feedback_adaptation": metadata.get("feedback_adaptation", capacity["feedback"]), "brick_status": metadata.get("brick_status", {"scheduled": False, "reason": "Il combinato viene valutato alla generazione del piano."}), "needs_review": needs_review, "race_goal": race_goal, "goal_warnings": goal_warnings,
+    return {"start": start.isoformat(), "end": (start + timedelta(days=6)).isoformat(), "version": revision.version if revision else 0, "generated": _has_generated_plan(db, start), "days": days, "summary": summary, "total_minutes": total, "target_minutes": metadata.get("target_minutes", min(profile["weekly_minutes"], capacity["limit"])), "confidence": metadata.get("confidence", capacity["confidence"]), "phase": capacity["phase"], "rationale": reasons, "adaptation_mode": "conservative_aerobic", "allocation": metadata.get("allocation", capacity["allocation"]), "feedback_adaptation": metadata.get("feedback_adaptation", capacity["feedback"]), "brick_status": metadata.get("brick_status", {"scheduled": False, "reason": "Il combinato viene valutato alla generazione del piano."}), "needs_review": needs_review, "race_goal": race_goal, "goal_warnings": goal_warnings,
             "block_preview": _preview(profile, start, total or min(profile["weekly_minutes"], capacity["limit"])), "can_undo": bool(db.query(PlanRevision).filter(PlanRevision.week_start == start.isoformat(), PlanRevision.undone_at.is_(None), PlanRevision.action != "undo").first())}
 
 
@@ -533,7 +543,7 @@ def generate_week(db: Session, value=None, regenerate=False) -> dict:
     today = _today()
     if start + timedelta(days=6) < today:
         raise HTTPException(422, "Non è possibile generare una settimana interamente passata.")
-    if _latest(db, start) and not regenerate:
+    if _has_generated_plan(db, start) and not regenerate:
         return get_week(db, start)
     profile, race_goal, goal_warnings = goal_context(db, load_settings(db))
     capacity = _capacity(db, profile, start)
@@ -699,7 +709,20 @@ def _prepare_workout_change(db: Session, workout_id: int, action: str, new_date:
     elif action == "shorten":
         if duration_min is None or duration_min < 15 or duration_min >= row.duration_min:
             raise HTTPException(422, "La durata deve essere almeno 15 minuti e inferiore a quella attuale.")
-        if row.sport in SPORTS:
+        if payload.get('source') == 'manual' and payload.get('exercises'):
+            raise HTTPException(409, 'La scheda palestra richiede una revisione di serie ed esercizi: crea una nuova scheda con il programma desiderato.')
+        if payload.get('source') == 'manual':
+            # Preserve the athlete's own phases/targets instead of substituting
+            # an unrelated automatic template under the same session name.
+            steps = deepcopy(payload.get('steps') or [])
+            if not steps or any(not isinstance(step.get('duration_min'), (int, float)) or step['duration_min'] <= 0 for step in steps):
+                raise HTTPException(422, 'Le fasi manuali non hanno durate valide per la riduzione.')
+            original = sum(step['duration_min'] for step in steps)
+            for step in steps:
+                step['duration_min'] = round(step['duration_min'] * duration_min / original, 2)
+            steps[-1]['duration_min'] = round(duration_min - sum(step['duration_min'] for step in steps[:-1]), 2)
+            payload.update(duration_min=duration_min, steps=steps)
+        elif row.sport in SPORTS:
             revised = _make_workout(profile, row.sport, duration_min, payload.get("priority", "support"), payload.get("phase", "base"), (_latest(db, start).version if _latest(db, start) else 0) + 1, start, short=True)
             payload = {**payload, **revised}
             if payload.get("brick"):
@@ -731,7 +754,7 @@ def _prepare_workout_change(db: Session, workout_id: int, action: str, new_date:
     latest = _latest(db, start)
     metadata = json.loads(latest.metadata_json) if latest else {}
     rationale = list(metadata.get("rationale") or [])
-    rationale.append({"move": "Seduta spostata nei minuti disponibili, senza aumentare il volume.", "shorten": "Blocco centrale ridotto, mantenendo riscaldamento e defaticamento.", "skip": "Seduta saltata: nessun debito da recuperare automaticamente."}[action])
+    rationale.append({"move": "Seduta spostata nei minuti disponibili, senza aumentare il volume.", "shorten": "Fasi manuali ridotte in proporzione, conservando obiettivi e istruzioni." if payload.get('source') == 'manual' else "Blocco centrale ridotto, mantenendo riscaldamento e defaticamento.", "skip": "Seduta saltata: nessun debito da recuperare automaticamente."}[action])
     metadata.update(rationale=rationale, workout_id=workout_id, reason=reason)
     if linked and action == "move":
         rationale.append("Le due parti del combinato sono state spostate insieme, riservando anche il tempo per il cambio.")

@@ -51,6 +51,9 @@ def test_unmatched_session_gets_explainable_score_without_inventing_performance(
     assert result['components'] and result['actions'] and result['confidence_percent'] > 50
     weighted = sum(item['score']*item['weight'] for item in result['components']) / sum(item['weight'] for item in result['components'])
     assert result['score'] == round(weighted)
+    assert result['tone'] == {1:'critical',2:'caution',3:'watch',4:'positive',5:'good'}[result['level']]
+    expected_level = 5 if result['score']>=80 else 4 if result['score']>=65 else 3 if result['score']>=50 else 2 if result['score']>=35 else 1
+    assert result['level'] == expected_level
     assert 'non misura la prestazione assoluta' in result['limits'][0]
 
 

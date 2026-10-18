@@ -7,7 +7,7 @@ def week(load=100, **changes):
     return {'hours':3,'activities':3,'elevation_m':100,'load':load,**changes}
 
 
-@pytest.mark.parametrize('load,tone', [(69,'neutral'),(70,'good'),(100,'good'),(130,'good'),(131,'critical')])
+@pytest.mark.parametrize('load,tone', [(69,'watch'),(70,'positive'),(90,'good'),(100,'good'),(110,'good'),(111,'watch'),(121,'caution'),(130,'caution'),(131,'critical')])
 def test_personal_load_comparisons_have_explicit_bounded_rules(load,tone):
     assessment=weekly_assessments(week(load),[week(),week(),week()],[])['load']
     assert assessment['tone']==tone

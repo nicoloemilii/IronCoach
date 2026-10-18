@@ -5,6 +5,7 @@ from app.db.iron_models import HealthMetric
 from app.db.models import DailyMetrics
 
 METRICS = {
+    'weight_kg': {'unit': 'kg', 'remote': 'weight', 'label': 'Peso', 'text': 'Peso registrato. Le variazioni descrivono lo storico: un peso inferiore non equivale a una prestazione migliore.'},
     'ctl': {'unit': 'punti', 'remote': 'ctl', 'label': 'Fitness · CTL', 'text': 'Stima del carico cronico: descrive la continuità recente, non una prestazione.'},
     'atl': {'unit': 'punti', 'remote': 'atl', 'label': 'Fatica · ATL', 'text': 'Stima del carico acuto. Un valore elevato rispetto al tuo storico segnala lavoro recente, non misura direttamente la fatica del corpo.'},
     'tsb': {'unit': 'punti', 'remote': None, 'label': 'Forma · TSB', 'text': 'Bilancio tra fitness e fatica. Un valore negativo indica carico acuto superiore al cronico; va letto con sonno e sensazioni.'},
@@ -39,6 +40,10 @@ def import_wellness(db, records):
                 if not remote or (remote not in item and remote not in custom):
                     continue
                 value = item[remote] if remote in item else custom[remote]
+                # Intervals marks a weight copied from athlete settings as
+                # temporary, not an authoritative measurement for that day.
+                if kind == 'weight_kg' and item.get('tempWeight') is True:
+                    value = None
                 if value is not None:
                     if isinstance(value, bool):
                         raise ValueError()
@@ -49,6 +54,8 @@ def import_wellness(db, records):
                         value /= 3600
                         if value > 24: raise ValueError()
                     if kind in ('body_battery_min', 'body_battery_max') and value > 100: raise ValueError()
+                    if kind == 'weight_kg' and value == 0:
+                        value = None
                 values[kind] = value
             if item.get('ctl') is not None and item.get('atl') is not None:
                 values['tsb'] = float(item['ctl']) - float(item['atl'])
@@ -80,7 +87,7 @@ def series(db, start, end):
     for row in sorted(rows, key=lambda x: x.source == 'intervals'):
         key = (row.date, row.kind)
         # Migrated copies must not resurrect a manual value subsequently cleared.
-        if row.source == 'manual' and row.date in live_manual_days: continue
+        if row.source == 'manual' and row.date in live_manual_days and hasattr(DailyMetrics, row.kind): continue
         if row.value is None: continue
         chosen[key] = {k: getattr(row, k) for k in ('date', 'kind', 'value', 'source', 'unit', 'observed_at', 'synced_at')}
     return sorted(chosen.values(), key=lambda x: (x['date'], x['kind']))
@@ -136,18 +143,19 @@ def health_response(db, start, end):
         values = [r for r in points if r['kind'] == kind]
         visible = [r for r in values if r['date'] >= str(start)]
         latest = visible[-1] if visible else None
-        baseline = _baseline(values, latest) if kind in ('hrv_ms', 'resting_hr_bpm') else None
+        baseline = _baseline(values, latest) if kind in ('hrv_ms', 'resting_hr_bpm', 'weight_kg') else None
         reference = None
-        if latest and kind in ('hrv_ms', 'resting_hr_bpm', 'sleep_hours'):
+        if latest and kind in ('hrv_ms', 'resting_hr_bpm', 'sleep_hours', 'weight_kg'):
             since = str(date.fromordinal(max(1, date.fromisoformat(latest['date']).toordinal() - 28)))
             reference = reference_range([point for point in values
                                          if since <= point['date'] < latest['date'] and point['source'] == latest['source']],
-                                        positive_only=kind in ('hrv_ms', 'resting_hr_bpm'))
+                                        positive_only=kind in ('hrv_ms', 'resting_hr_bpm', 'weight_kg'))
         result.append({'kind': kind, 'label': spec['label'], 'unit': spec['unit'], 'points': visible,
                        'latest': latest, 'baseline': baseline, 'reference_range': reference, 'explanation': spec['text'],
                        'stale': bool(latest and (end - date.fromisoformat(latest['date'])).days > 1)})
         if not latest:
             missing = {
+                'weight_kg': 'Nessuna pesata ricevuta nel periodo. Il peso predefinito del profilo non viene trasformato in una misurazione.',
                 'body_battery': 'Non è disponibile un valore attuale di Body Battery. I minimi e massimi giornalieri sono misure diverse.',
                 'body_battery_min': 'BodyBatteryMin non ricevuto. In Intervals.icu configura il campo wellness e abilita il download wellness da Garmin.',
                 'body_battery_max': 'BodyBatteryMax non ricevuto. In Intervals.icu configura il campo wellness e abilita il download wellness da Garmin.',

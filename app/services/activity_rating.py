@@ -186,7 +186,7 @@ def _rating(activity, load, history, loads, health, goal, legs, now):
         components.append(recovery)
     total_weight = sum(item['weight'] for item in components)
     score = round(sum(item['score'] * item['weight'] for item in components) / total_weight)
-    level = 5 if score >= 85 else 4 if score >= 70 else 3 if score >= 55 else 2 if score >= 40 else 1
+    level = 5 if score >= 80 else 4 if score >= 65 else 3 if score >= 50 else 2 if score >= 35 else 1
     evidence = [item['reason'] for item in components]
     if duration is not None:
         evidence.insert(0, f'Durata {duration/60:.0f} minuti.' + (f' Carico {load:.0f} punti.' if load is not None else ''))
@@ -216,7 +216,7 @@ def _rating(activity, load, history, loads, health, goal, legs, now):
                'Seduta accettabile, con margini da verificare.' if score < 70 else
                'Seduta ben proporzionata al lavoro recente.' if score < 85 else
                'Seduta ben inserita nel contesto di allenamento.')
-    return {**base, 'score': score, 'judgment': grade(score), 'tone': 'critical' if level == 1 else 'caution' if level <= 3 else 'good',
+    return {**base, 'score': score, 'judgment': grade(score), 'tone': {1:'critical',2:'caution',3:'watch',4:'positive',5:'good'}[level],
             'level': level, 'confidence_percent': confidence, 'summary': summary, 'explanation': summary,
             'components': components, 'evidence': evidence, 'actions': [action]}
 

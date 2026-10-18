@@ -21,12 +21,16 @@ from app.api.routes_strava import router as strava_router
 from app.api.routes_progress import router as progress_router
 from app.api.routes_backup import router as backup_router
 from app.api.routes_health_reports import router as health_reports_router
+from app.api.routes_activity_detail import router as activity_detail_router
 from app.db.health_reports import ensure_health_reports_schema
+from app.api.routes_training import router as training_router
+from app.db.training_models import ensure_training_schema
 from app.db.migrations import migrate
 from app.services import sync_jobs
 
 migrate(engine)
 ensure_health_reports_schema(engine)
+ensure_training_schema(engine)
 
 
 @asynccontextmanager
@@ -56,6 +60,8 @@ app.include_router(strava_router)
 app.include_router(progress_router)
 app.include_router(backup_router)
 app.include_router(health_reports_router)
+app.include_router(activity_detail_router)
+app.include_router(training_router)
 
 # A restore must not race a request that read an old workout/profile and then
 # writes after replacement. Read-only navigation remains concurrent.

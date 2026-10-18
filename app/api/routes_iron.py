@@ -194,7 +194,7 @@ def dashboard(day: Date | None = None, db: Session = Depends(get_db)):
                  if rows and all(known_load(a) for a in rows) else {})
     condition = []
     for metric in health['metrics']:
-        if metric['kind'] in ('ctl', 'atl', 'tsb', 'sleep_hours', 'hrv_ms', 'resting_hr_bpm'):
+        if metric['kind'] in ('ctl', 'atl', 'tsb', 'sleep_hours', 'hrv_ms', 'resting_hr_bpm', 'weight_kg'):
             if not metric['latest'] and metric['kind'] in ('ctl', 'atl', 'tsb') and estimates.get('days', 0) > 0:
                 metric = dict(metric, latest={'value': estimates.get(metric['kind']), 'source': 'local_estimate', 'date': str(today)}, stale=False,
                               explanation=metric['explanation'] + ' Stima locale con FTP legacy 170 W, non un dato Intervals.')

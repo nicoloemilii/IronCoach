@@ -78,6 +78,7 @@
     if (['hrv_ms','resting_hr_bpm'].includes(item.kind) && value <= 0) return status('caution', 'Misura da verificare', 'Il valore non consente un confronto utile: controlla la misura alla fonte.');
     const classified=individual(item,peers); if(classified) return classified;
     if (['hrv_ms','resting_hr_bpm','sleep_hours'].includes(item.kind)) return againstHistory(value, band(item), item.kind);
+    if (item.kind === 'weight_kg') return info('Peso registrato', 'Il peso è una misura osservata: senza un obiettivo personale non assegno un giudizio di migliore o peggiore.');
     if (item.kind === 'ctl') return info('Carico cronico', 'Descrive la continuità del carico; un valore più alto non è automaticamente migliore.');
     if (item.kind === 'tsb') {
       if (value <= -30) return status('critical', 'Recupero da rivalutare', 'Il motore del Coach usa TSB ≤ −30 come segnale di carico elevato. Valutalo con sonno, sensazioni e storico.');
@@ -92,6 +93,13 @@
     if (item.kind === 'stress_score' && value >= 75) return status('caution', 'Stress percepito elevato', 'Il modello del piano considera questo valore dichiarato quando riduce il lavoro proposto.');
     if (item.kind === 'body_battery' && value < 30) return status('caution', 'Riserva stimata bassa', 'È una stima del dispositivo da confrontare con sensazioni e storico.');
     return info('Dato di contesto', 'Leggi il valore con la sua fonte e il tuo obiettivo; non ha una soglia universale di buono o cattivo.');
+  }
+  function weekly(value,reference) {
+    if(!finite(value))return unknown('Nessuna misura nel periodo.');
+    if(!finite(reference)||reference<=0)return info('Riferimento in costruzione','Servono periodi confrontabili.');
+    const ratio=value/reference;
+    const tone=ratio>1.3?'critical':ratio>1.2?'caution':ratio>1.1?'watch':ratio<.7?'watch':ratio<.9?'positive':'good';
+    return status(tone,{critical:'Incremento marcato',caution:'Sopra il riferimento',watch:ratio<.7?'Stimolo ridotto':'Aumento da seguire',positive:'Stimolo contenuto',good:'In linea con il riferimento'}[tone],'Confronto con un unico riferimento personale per tutte le settimane.');
   }
   function readiness(value, confidence = null) {
     if (!finite(value) || value < 0 || value > 100) return unknown('Servono dati di recupero sufficienti per il modello.');
@@ -131,6 +139,6 @@
     if (anchor) anchor.after(chip); else node.append(chip);
     if (showReason && value.reason) { const text = document.createElement('p'); text.className = 'status-reason'; text.dataset.statusMarker = 'true'; text.textContent = value.reason; node.append(text); }
   }
-  root.IronCoachMetricStatus = {metric, five, palette, individual, readiness, assessment, coverage, trend, info, unknown, apply, band};
+  root.IronCoachMetricStatus = {metric, five, palette, individual, weekly, readiness, assessment, coverage, trend, info, unknown, apply, band};
   if (typeof module !== 'undefined' && module.exports) module.exports = root.IronCoachMetricStatus;
 })();

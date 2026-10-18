@@ -221,3 +221,12 @@ test('DOM labels and reasons are inert text and invalid tones fall back to an ex
   assert.equal(card.querySelector('.metric-status-icon').textContent, '?');
   assert.doesNotThrow(() => status.apply(null, status.unknown()));
 });
+
+
+test('weekly chart classification uses a shared reference and saturates consistently above the reference',()=>{
+ assert.equal(status.weekly(434,263).tone,'critical');assert.equal(status.weekly(391,263).tone,'critical');
+ assert.equal(status.weekly(272,263).tone,'good');assert.equal(status.weekly(191,263).tone,'positive');
+ const ranks={good:1,watch:2,caution:3,critical:4};const values=[100,111,121,131,200];
+ const tones=values.map(value=>status.weekly(value,100).tone);assert.deepEqual(tones,['good','watch','caution','critical','critical']);
+ assert.equal(status.weekly(null,100).tone,'unknown');assert.equal(status.weekly(100,null).tone,'neutral');assert.equal(status.weekly(100,0).tone,'neutral');
+});

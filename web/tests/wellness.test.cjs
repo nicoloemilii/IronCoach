@@ -7,6 +7,7 @@ const path = require('node:path');
 const { JSDOM, VirtualConsole } = require('jsdom');
 const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
 const source = fs.readFileSync(path.join(__dirname, '../wellness.js'), 'utf8');
+const colorsSource = fs.readFileSync(path.join(__dirname, '../metric-status.js'), 'utf8');
 const clone = value => JSON.parse(JSON.stringify(value));
 
 function reportFixture(changes = {}) {
@@ -32,7 +33,7 @@ async function setup(t, { page = 'health', reports = [], profile = profileFixtur
   const w = dom.window;
   const $ = selector => w.document.querySelector(selector);
   const calls = [];
-  const data = { reports: clone(reports), profile: clone(profile), loads: 0, failures: { ...fail }, busy: false };
+  const data = { reports: clone(reports), profile: clone(profile), loads: 0, failures: { ...fail }, busy: false, openedActivities: [], openedMetrics: [] };
   const NativeDate = w.Date;
   w.Date = class extends NativeDate {
     constructor(...args) { super(...(args.length ? args : ['2026-10-18T10:00:00Z'])); }
@@ -98,7 +99,7 @@ async function setup(t, { page = 'health', reports = [], profile = profileFixtur
     w.document.dispatchEvent(new w.CustomEvent('iron:pagechange', { detail: { id, userInitiated: true } }));
   };
   for (const item of w.document.querySelectorAll('.page')) item.hidden = item.id !== page;
-  w.IronCoachUI = { el, button, api, action, number: (value, digits = 1) => value == null ? '—' : new Intl.NumberFormat('it-IT', { maximumFractionDigits: digits }).format(value),
+  w.IronCoachUI = { el, button, api, action, openActivity: async id => data.openedActivities.push(id), openHealthMetric: item => data.openedMetrics.push(item), number: (value, digits = 1) => value == null ? '—' : new Intl.NumberFormat('it-IT', { maximumFractionDigits: digits }).format(value),
     load: async () => { data.loads++; loaded(); } };
   const flush = async () => {
     for (let index = 0; index < 12; index++) await new Promise(resolve => setImmediate(resolve));
@@ -109,7 +110,7 @@ async function setup(t, { page = 'health', reports = [], profile = profileFixtur
   const open = () => { byText('+ Segnala un problema').click(); return $('#health-report-form'); };
   const submit = () => $('#health-report-form').dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true }));
   t.after(() => { assert.deepEqual(errors, []); w.close(); });
-  w.eval(source);
+  w.eval(colorsSource);w.eval(source);
   await flush();
   return { w, $, calls, data, flush, navigate, loaded, byText, open, submit };
 }
@@ -284,4 +285,49 @@ test('a failed deletion retains the episode and permits deletion after recovery'
   byText('Elimina', $('.symptom-journal')).click();
   await flush();
   assert.equal($('.symptom-journal').children.length, 0);
+});
+
+test('profile records switch between all time and ninety days and open the actual recorded activity', async t => {
+  const record = (value,id,name) => ({ value,activity_id:id,activity_name:name,label:'Distanza massima',unit:'km',scope:'whole_activity' });
+  const profile=profileFixture({totals:{all_time:{hours:100,distance_km:3500}},records_note:'Record sulle attività intere, non su segmenti.',
+    sports:[{sport:'bike',label:'Bici',activities:2,weekly_minutes:240,totals:{all_time:{activities:20,hours:60,distance_km:1600},days_90:{activities:6,hours:20,distance_km:450}},
+      records:{all_time:{longest_distance_km:record(200,77,'<img src=x onerror=alert(1)>')},days_90:{longest_distance_km:record(80,88,'Uscita recente')}}}]});
+  const {$,data,byText}=await setup(t,{page:'athlete',profile});
+  assert.match($('.profile-record-grid').textContent,/200 km/);
+  assert.equal($('.profile-record-grid img'),null);
+  assert.equal(byText('Tutto lo storico').getAttribute('aria-pressed'),'true');
+  $('.profile-record-tile button').click();
+  assert.deepEqual(data.openedActivities,[77]);
+  byText('Ultimi 90 giorni').click();
+  assert.match($('.profile-record-grid').textContent,/80 km/);
+  assert.doesNotMatch($('.profile-record-grid').textContent,/200 km/);
+  assert.equal(byText('Ultimi 90 giorni').getAttribute('aria-pressed'),'true');
+  $('.profile-record-tile button').click();
+  assert.deepEqual(data.openedActivities,[77,88]);
+  byText('Tutto lo storico').click();
+  assert.match($('.profile-record-grid').textContent,/200 km/);
+});
+
+test('observed weight has an accessible history action and opens four weeks without inventing missing values', async t => {
+  const weight={kind:'weight_kg',label:'Peso',unit:'kg',latest:{value:70.8,date:'2026-10-18',source:'intervals'},
+    points:[{value:74,date:'2026-08-01',source:'intervals'},{value:71.5,date:'2026-10-01',source:'intervals'},{value:70.8,date:'2026-10-18',source:'intervals'}],stale:false};
+  const {$,data}=await setup(t,{page:'athlete',profile:profileFixture({health:{metrics:[weight],weight:{...weight,change_28d_kg:-.7}}})});
+  const card=$('.profile-health-card[data-kind="weight_kg"]');
+  assert.match(card.textContent,/70,8 kg/);
+  assert.match(card.textContent,/-0,7 kg nelle ultime 4 settimane/);
+  assert.equal(card.querySelector('button').getAttribute('aria-label'),'Apri andamento Peso');
+  card.querySelector('button').click();
+  assert.equal(data.openedMetrics.length,1);
+  assert.deepEqual(Array.from(data.openedMetrics[0].points,point=>point.date),['2026-10-01','2026-10-18']);
+  assert.equal(data.openedMetrics[0].latest.value,70.8);
+});
+
+test('configured thresholds stay distinct from whole activity power records', async t => {
+  const profile=profileFixture({thresholds:{cycling_ftp_watts:{value:235,source:'measured',measured_on:'2026-10-01'}},
+    sports:[{sport:'bike',label:'Bici',activities:1,weekly_minutes:60,totals:{all_time:{activities:1,hours:1,distance_km:30},days_90:{activities:1,hours:1,distance_km:30}},
+      records:{all_time:{highest_avg_power_w:{value:350,unit:'W',label:'Potenza media massima di un’attività',activity_name:'Uscita intensa',activity_id:77,scope:'whole_activity'}},days_90:{}}}]});
+  const {$}=await setup(t,{page:'athlete',profile});
+  assert.match($('.profile-thresholds').textContent,/FTP bici235 WTest misurato/);
+  assert.match($('.profile-record-tile').textContent,/350 W/);
+  assert.doesNotMatch($('.profile-thresholds').textContent,/350/);
 });

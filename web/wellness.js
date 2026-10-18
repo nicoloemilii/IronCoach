@@ -28,12 +28,46 @@
       card.append(button('Elimina',()=>action(async()=>{await api(`/health/reports/${report.id}`,{method:'DELETE'});await ui.load();await loadReports();}),'text-button'));journal.append(card);
     }
   }catch(error){journal.replaceChildren(el('p','Segnalazioni non disponibili.'),button('Riprova',()=>action(loadReports)));}}
-  async function loadProfile(){if(!profile)return;try{const value=await api('/athlete/derived-profile');profile.replaceChildren(el('p','PROFILO AUTOMATICO','eyebrow'),el('h2',value.name||'Il tuo profilo atleta'),el('p',value.headline));
-    const grid=el('div',null,'derived-grid');for(const [label,amount] of [['Attività nello storico',value.total_activities],['Media settimanale · ore',value.weekly_minutes/60],['Carico settimanale',value.weekly_load]]){const card=el('div');card.append(el('small',label),el('strong',number(amount,1)));grid.append(card);}profile.append(grid);
+  async function loadProfile(){if(!profile)return;try{
+    const value=await api('/athlete/derived-profile');
+    profile.replaceChildren(el('p','PROFILO AUTOMATICO','eyebrow'),el('h2',value.name||'Il tuo profilo atleta'),el('p',value.headline));
+    const totals=value.totals?.all_time;
+    const grid=el('div',null,'derived-grid');
+    for(const [label,amount] of [['Attività nello storico',value.total_activities],['Ore nello storico',totals?.hours],['Distanza totale · km',totals?.distance_km],['Media settimanale · ore',value.weekly_minutes==null?null:value.weekly_minutes/60],['Carico settimanale',value.weekly_load]]){
+      if(amount==null&&label!=='Carico settimanale')continue;
+      const card=el('div');card.append(el('small',label),el('strong',number(amount,1)));grid.append(card);
+    }
+    profile.append(grid);
     const sports=el('div',null,'derived-sports');for(const sport of value.sports||[])if(sport.activities)sports.append(el('span',`${sport.label} · ${sport.activities} sedute · ${number(sport.weekly_minutes,0)} min/settimana`,'badge'));profile.append(sports);
-    if(value.goal)profile.append(el('h3',value.goal.name));
+    if(value.goal){const goal=el('section',null,'profile-goal');goal.append(el('p','OBIETTIVO ATTIVO','eyebrow'),el('h3',value.goal.name));
+      const names={cycling:'Bici',running:'Corsa',swimming:'Nuoto'};
+      for(const leg of value.goal.legs||[])goal.append(el('p',`${names[leg.sport]||leg.sport} · ${number(leg.distance_km,1)} km${leg.elevation_gain_m?' · '+number(leg.elevation_gain_m,0)+' m D+':''}`));profile.append(goal);
+    }
     for(const [title,items] of [['Punti di forza',value.strengths],['Priorità',value.priorities]])if(items?.length){profile.append(el('h3',title));const list=el('ul',null,'coach-findings');for(const item of items)list.append(el('li',item));profile.append(list);}
     for(const reason of value.restrictions?.reasons||[])profile.append(el('p',reason,'error'));
+    const metrics=value.health?.metrics||[];
+    if(metrics.length){const section=el('section',null,'profile-health');section.append(el('h3','Misure e condizione'),el('p','Ultimi valori registrati','caption'));const cards=el('div',null,'profile-health-grid');
+      for(const item of metrics){const card=el('article',null,'profile-health-card');card.dataset.kind=item.kind;card.append(el('small',item.label),el('strong',`${number(item.latest.value,1)} ${item.unit}`));
+        if(item.kind==='weight_kg'&&value.health.weight?.change_28d_kg!=null){const change=value.health.weight.change_28d_kg;card.append(el('span',`${change>0?'+':''}${number(change,1)} kg nelle ultime 4 settimane`,'caption'));}
+        if(window.IronCoachMetricStatus){const status=window.IronCoachMetricStatus.metric(item,metrics);window.IronCoachMetricStatus.apply(card,status,false);}
+        if(ui.openHealthMetric){const open=button('Andamento ↗',()=>{const from=new Date(today()+'T12:00:00Z');from.setUTCDate(from.getUTCDate()-27);ui.openHealthMetric({...item,points:(item.points||[]).filter(point=>point.date>=from.toISOString().slice(0,10))});},'metric-open');open.setAttribute('aria-label',`Apri andamento ${item.label}`);card.append(open);}cards.append(card);
+      }section.append(cards);profile.append(section);
+    }
+    const thresholds=Object.entries(value.thresholds||{});
+    if(thresholds.length){const section=el('section',null,'profile-thresholds');section.append(el('h3','Soglie di riferimento'));const labels={cycling_ftp_watts:['FTP bici','W'],running_threshold_pace_sec_per_km:['Soglia corsa','s/km'],swimming_css_sec_per_100m:['CSS nuoto','s/100 m']};const cards=el('div',null,'derived-grid');
+      for(const [key,threshold]of thresholds){const [label,unit]=labels[key]||[key,''];const card=el('div');card.append(el('small',label),el('strong',`${number(threshold.value,1)} ${unit}`),el('span',threshold.source==='measured'?'Test misurato':'Valore stimato','caption'));cards.append(card);}section.append(cards);profile.append(section);
+    }
+    const observedSports=(value.sports||[]).filter(sport=>sport.totals?.all_time?.activities>0&&sport.records);
+    if(observedSports.length){const section=el('section',null,'profile-records');section.append(el('h3','Le tue migliori attività registrate'));const tabs=el('div',null,'profile-record-tabs');tabs.setAttribute('role','group');tabs.setAttribute('aria-label','Periodo dei record');const content=el('div',null,'profile-record-content');
+      function drawRecords(period){content.replaceChildren();for(const control of tabs.children)control.setAttribute('aria-pressed',String(control.dataset.period===period));
+        for(const sport of observedSports){const records=sport.records[period]||{},sportTotals=sport.totals[period]||{};const card=el('article',null,'profile-record-sport');card.append(el('h4',sport.label),el('p',`${number(sportTotals.activities,0)} attività · ${number(sportTotals.hours,1)} ore · ${number(sportTotals.distance_km,1)} km`,'caption'));const tiles=el('div',null,'profile-record-grid');
+          for(const [key,record]of Object.entries(records)){if(!record)continue;const tile=el('div',null,'profile-record-tile');tile.dataset.record=key;tile.append(el('small',record.label),el('strong',`${number(record.value,key==='longest_distance_km'?2:1)} ${record.unit}`));
+            if(ui.openActivity){const open=button(record.activity_name,()=>ui.openActivity(record.activity_id),'text-button');open.setAttribute('aria-label',`Apri attività del record: ${record.activity_name}`);tile.append(open);}else tile.append(el('span',record.activity_name,'caption'));tiles.append(tile);
+          }if(!tiles.children.length)tiles.append(el('p','Nessun record documentato in questo periodo.','empty-state'));card.append(tiles);content.append(card);
+        }
+      }
+      for(const [period,label]of [['all_time','Tutto lo storico'],['days_90','Ultimi 90 giorni']]){const control=button(label,()=>drawRecords(period),'outline');control.dataset.period=period;tabs.append(control);}section.append(tabs,content);section.append(el('p',value.records_note,'caption'));profile.append(section);drawRecords('all_time');
+    }
   }catch(error){profile.replaceChildren(el('p','Il profilo automatico non è disponibile.'),button('Riprova',()=>action(loadProfile)));}}
   let refreshing=false;
   async function refresh(){if(refreshing)return;const page=document.querySelector('.page:not([hidden])')?.id;if(!['health','athlete'].includes(page))return;refreshing=true;try{await(page==='health'?loadReports():loadProfile());}finally{refreshing=false;}}

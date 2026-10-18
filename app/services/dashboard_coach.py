@@ -31,11 +31,17 @@ def weekly_assessments(current, history, condition):
         reference = median(baseline); change = (value / reference - 1) * 100
         note = f'{name}: {value:g} {unit}, {change:+.0f}% rispetto alla mediana dei periodi precedenti sugli stessi giorni della settimana.'
         if value > reference * 1.3:
-            result[key] = judgment(f'{name} elevato rispetto al solito', 'critical' if key == 'load' else 'caution', note,
+            result[key] = judgment(f'{name} elevato rispetto al solito', 'critical', note,
                 'Verifica se l’aumento era programmato; evita di aggiungere lavoro per compensare sedute perse.')
+        elif value > reference * 1.2:
+            result[key] = judgment(f'{name} sopra il riferimento', 'caution', note, 'Non aggiungere altro lavoro; rivedi recupero e distribuzione delle sedute.')
+        elif value > reference * 1.1:
+            result[key] = judgment(f'{name} in aumento', 'watch', note, 'Mantieni sotto controllo la risposta prima di aumentare ancora.')
         elif value < reference * .7:
-            result[key] = judgment(f'{name} ridotto', 'neutral', note,
+            result[key] = judgment(f'{name} ridotto', 'watch', note,
                 'Può essere coerente con scarico o disponibilità ridotta. Non recuperare automaticamente il volume mancante.')
+        elif value < reference * .9:
+            result[key] = judgment(f'{name} contenuto', 'positive', note, 'Mantieni il recupero previsto: non compensare automaticamente il volume inferiore.')
         else:
             result[key] = judgment(f'{name} coerente con lo storico', 'good', note,
                 'Se recupero e sensazioni lo consentono, mantieni il programma. Non aggiungere lavoro soltanto perché il carico è stabile.')

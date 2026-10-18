@@ -413,15 +413,20 @@ La Home confronta la settimana da lunedì a oggi con gli stessi giorni della set
 
 | Colore | Stato interno | Significato |
 | --- | --- | --- |
-| Verde | `good` | Valore nel proprio intervallo descrittivo; valutazione Coach almeno 75; riferimento gara quantitativo coperto al 100% |
-| Ambra | `caution` | Fuori dall'intervallo personale; valutazione da 60 a meno di 75; copertura gara parziale o segnale contestuale da approfondire |
-| Rosso | `critical` | Valutazione Coach sotto 60, readiness del modello sotto 35 o TSB importato ≤ −30 secondo le euristiche dell'app |
-| Blu | `neutral` | Dato di contesto, carico CTL/ATL senza un giudizio relativo, stima locale o conferma personale della checklist |
-| Grigio | `unknown` | Dati mancanti, obsoleti o insufficienti per un confronto; stima con copertura/confidenza del modello bassa |
+| Rosso | `critical` | Punteggio della scala a cinque livelli sotto 35, oppure regola critica specifica del carico |
+| Arancio | `caution` | Punteggio da 35 a meno di 50; anche controlli qualitativi o copertura gara parziale possono usare questo stato |
+| Giallo | `watch` | Punteggio da 50 a meno di 65: scostamento o progressione da seguire |
+| Verde chiaro | `positive` | Punteggio da 65 a meno di 80: indicatore discreto, con margine da consolidare |
+| Verde | `good` | Punteggio almeno 80; nella copertura gara, riferimento quantitativo coperto al 100% |
+| Grigio | `detraining` | CTL ridotto di oltre il 10% rispetto a una lettura di almeno due settimane prima, con almeno sette osservazioni precedenti comparabili; può riflettere uno scarico programmato |
+| Blu | `neutral` | Dato senza graduazione di prestazione, come peso registrato, stima locale o conferma personale della checklist |
+| Bianco | `unknown` | Dati mancanti, obsoleti o insufficienti; stima di recupero con copertura dei segnali inferiore al 50% |
+
+Le soglie 35/50/65/80 sono quelle di `five`, usata per il voto della seduta, il recupero e gli indicatori personali che dispongono di un confronto. Non cambiano il significato fisiologico dei numeri né rendono il peso un punteggio: ciascuna metrica mantiene le proprie regole. Il grigio descrive una riduzione osservata del carico cronico, senza certificare una perdita di prestazione. Le card di solo contesto non sono mostrate nella griglia Salute; il peso rimane visibile e apre il suo andamento.
 
 Per HRV, frequenza a riposo e sonno l'intervallo è descrittivo: almeno sette osservazioni comparabili della stessa fonte, `Q1 − 1,5 × IQR` fino a `Q3 + 1,5 × IQR`, con il limite inferiore troncato a zero. In Salute si usano i 28 giorni precedenti l'ultima lettura; nel recupero i 28 giorni precedenti la settimana recente, confrontati con la mediana delle tre letture recenti. `reference_range` è `null` quando manca uno storico sufficiente; quando disponibile espone `lower`, `upper`, `count` e `method: descriptive_iqr`.
 
-Un HRV molto alto rispetto al proprio storico è ambra, così come un valore molto basso: “più alto” non diventa automaticamente “migliore”. Un sonno nella durata abituale non certifica qualità o recupero. Le stime locali rimangono blu anche quando il numero supera una soglia usata per i dati importati. ATL può diventare ambra se il TSB della stessa fonte e data segnala un carico relativo elevato; TSB da −25 a oltre −30 è ambra. Readiness da 35 a meno di 65 è ambra, da 65 è verde nel modello; una confidenza del modello inferiore a 50 mantiene il grigio. Queste sono regole dichiarate dell'app, non soglie mediche o garanzie di sicurezza.
+HRV, frequenza a riposo e sonno usano il rapporto con il proprio riferimento e l'intervallo descrittivo: la gravità dello scostamento determina il livello. Un HRV insolitamente alto non viene considerato automaticamente migliore; quando la lettura è fuori dall'intervallo, il punteggio del singolo indicatore non supera 55. Un sonno nella durata abituale non certifica qualità o recupero. Le stime locali rimangono blu. ATL considera il rapporto con il CTL della stessa fonte e data; TSB ≤ −30 è rosso e da −30 escluso a −25 incluso è arancio. Il recupero usa le cinque fasce della tabella; una copertura dei segnali inferiore al 50% mantiene lo stato bianco `unknown`. Queste sono regole dichiarate dell'app, non soglie mediche o garanzie di sicurezza.
 
 ### Coach `rules-1`
 
@@ -465,4 +470,20 @@ I test delle integrazioni simulano API, errori e credenziali. Un risultato autom
 
 Verifica storica 1.2: 232 test backend e 40 test DOM superati; sintassi JavaScript valida. Nella verifica 1.1 le nuove route e lo schema OpenAPI rispondevano nell'app completa e il frontend è stato caricato in JSDOM con API locali reali, senza inviare moduli o modificare dati utente.
 
-Verifica 1.3 del 18 ottobre 2026: 418 test backend e 91 test frontend superati. La prova integrata in JSDOM con server locale e dati sintetici isolati ha completato sei flussi con 124 richieste, zero errori HTTP e zero errori JavaScript. Dettagli in `docs/VERIFICA_1_3.md`. Il controllo statico delle coppie di colore selezionate ha rilevato un contrasto minimo di 5,30:1; non equivale a una verifica completa di accessibilità o di layout. La verifica visiva a 360/768/1440 pixel resta incompleta: nessun browser disponibile tramite CUA e avvio Firefox rifiutato dall'approvazione automatica. Non sono state effettuate nuove prove con account reali, sincronizzazioni personali o trasferimenti fisici di allenamenti sui dispositivi. I file FIT bici/corsa richiedono ancora collaudo su Forerunner 955 ed Edge 530; il connettore Garmin cloud resta bloccato in attesa dell'accesso ufficiale.
+Verifica 1.3 del 18 ottobre 2026: 490 test backend e 116 test frontend superati. La prova integrata in JSDOM con server locale e dati sintetici isolati ha completato sei flussi con 124 richieste, zero errori HTTP e zero errori JavaScript. Dettagli in `docs/VERIFICA_1_3.md`. Il controllo statico delle coppie di colore selezionate ha rilevato un contrasto minimo di 5,30:1; non equivale a una verifica completa di accessibilità o di layout. La verifica visiva a 360/768/1440 pixel resta incompleta: nessun browser disponibile tramite CUA e avvio Firefox rifiutato dall'approvazione automatica. Nella successiva revisione sono stati letti attività e wellness Intervals dell’account configurato ed è stata completata una sincronizzazione personale. Account Strava e trasferimenti fisici di allenamenti sui dispositivi restano non verificati. I file FIT bici/corsa richiedono ancora collaudo su Forerunner 955 ed Edge 530; il connettore Garmin cloud resta bloccato in attesa dell'accesso ufficiale.
+
+
+## Revisione attività, peso e schede manuali
+
+| Endpoint | Contratto |
+|---|---|
+| GET /activities/{id}/detail | Summary, streams osservati, GPS, disponibilità provider e voto coerente con lo snapshot remoto letto; nessuna mutazione delle attività |
+| GET /health/metrics | Aggiunge weight_kg da wellness.weight; esclude tempWeight e zero, nessun peso predefinito promosso a misura |
+| GET /athlete/derived-profile | Totali e record per attività intera, tutto lo storico/90 giorni, salute osservata e soglie documentate |
+| POST /training/manual | Seduta utente nel calendario; fasi o esercizi palestra validati, controlli disponibilità e avvisi, nessuna attività registrata |
+| GET /training/gym/{id}/progress | Scheda e progresso persistente, timer scaduto ricalcolato correttamente |
+| PUT /training/gym/{id}/progress | expected_revision, serie completate, esercizio attivo, timer e note; conflitti respinti |
+
+La generazione automatica conserva le sedute manuali. Spostare una scheda mantiene gli esercizi. Accorciare una seduta aerobica manuale riduce le sue fasi originali; il generico accorciamento di una scheda palestra viene respinto per evitare di cambiare durata lasciando serie incoerenti. Il nuovo gym_progress è una tabella additiva e opzionale nei backup precedenti.
+
+Verifica finale di questa revisione: 490 test backend e 116 test frontend; prova integrata palestra/pianificazione con 66 richieste HTTP, zero errori e nessuna attività creata. Grafici SVG renderizzati e ispezionati come artefatti; il layout completo nel browser rimane non verificato.

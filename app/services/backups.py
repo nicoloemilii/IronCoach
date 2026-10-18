@@ -23,6 +23,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.db.database import Base
 from app.db import models, experience_models, iron_models, planning_models, progress_models  # register allowlisted tables
 from app.db import health_reports  # register optional personal symptom journal
+from app.db import training_models  # register optional gym checklist progress
 from app.db.garmin_models import GarminDelivery
 
 MAX_BYTES = 20 * 1024 * 1024
@@ -35,7 +36,7 @@ CORE_TABLES = (
     'athlete_settings', 'plan_revisions',
 )
 # New additive tables are optional when reading an older format-version-1 file.
-PROGRESS_TABLES = ('workout_resolutions', 'goal_preparation_items', 'health_reports')
+PROGRESS_TABLES = ('workout_resolutions', 'goal_preparation_items', 'health_reports', 'gym_progress')
 _PREVIEWS: dict[str, dict] = {}
 _PREVIEW_LOCK = Lock()
 
@@ -245,6 +246,7 @@ def _validate_semantics(data):
     from app.api.routes_experience import Checkin, Preparation
     from app.api.routes_progress import ResolutionInput, PreparationState
     from app.services.health_reports import HealthReportInput
+    from app.services.manual_training import GymExercise, validate_progress_for_plan
     try:
         for row in data.get('athlete_settings', []):
             if row['revision'] < 0 or row['revision'] >= 2**63 - 1:
@@ -270,6 +272,19 @@ def _validate_semantics(data):
         for row in data.get('iron_users', []):
             ZoneInfo(row['timezone'])
         workouts = {row['id']: row for row in data.get('workouts', [])}
+        for row in data.get('gym_progress', []):
+            if not 1 <= row['revision'] < 2**63 - 1:
+                raise ValueError()
+            workout = workouts[row['workout_id']]
+            plan = _parse_json(workout['payload_json'])
+            exercises = plan.get('exercises')
+            if workout['sport'] != 'strength' or not isinstance(exercises, list) or not 1 <= len(exercises) <= 30:
+                raise ValueError()
+            exercises = [GymExercise.model_validate(exercise).model_dump() for exercise in exercises]
+            progress = _parse_json(row['payload_json'])
+            if 'expected_revision' in progress:
+                raise ValueError()
+            validate_progress_for_plan({**progress, 'expected_revision': 0}, exercises)
         for row in data.get('workout_resolutions', []):
             ResolutionInput.model_validate({'status': row['kind'], 'reason': row['reason']})
             if row['prior_status'] != 'planned' or (row['undone_at'] is None and workouts[row['workout_id']]['status'] != 'skipped'):

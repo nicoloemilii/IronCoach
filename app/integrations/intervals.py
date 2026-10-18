@@ -24,7 +24,7 @@ class IntervalsError(Exception):
         super().__init__(message)
 
 
-def get_remote(resource, params=None, configuration=None):
+def _get_remote(resource, params=None, configuration=None, *, activity_id=None, timeout=20, attempts=2):
     import re
     try:
         config = configuration if configuration is not None else intervals_credentials.credentials()
@@ -36,15 +36,16 @@ def get_remote(resource, params=None, configuration=None):
         raise IntervalsError('Collega Intervals.icu inserendo la chiave API in Connessioni.', 409)
     if not re.fullmatch(r'[A-Za-z0-9_-]{1,40}', athlete_id):
         raise IntervalsError('ID atleta non valido.', 422)
-    for attempt in range(2):
+    path = f'/athlete/{athlete_id}{resource}' if activity_id is None else f'/activity/{activity_id}{resource}'
+    for attempt in range(attempts):
         try:
-            response = requests.get(f'{BASE_URL}/athlete/{athlete_id}{resource}', params=params,
-                                    auth=('API_KEY', key), timeout=20, allow_redirects=False)
+            response = requests.get(f'{BASE_URL}{path}', params=params,
+                                    auth=('API_KEY', key), timeout=timeout, allow_redirects=False)
         except requests.RequestException:
-            if attempt == 0:
+            if attempt + 1 < attempts:
                 time.sleep(.5); continue
             raise IntervalsError('Intervals.icu non è raggiungibile. Controlla la connessione e riprova.') from None
-        if response.status_code >= 500 and attempt == 0:
+        if response.status_code >= 500 and attempt + 1 < attempts:
             time.sleep(.5); continue
         break
     if response.status_code == 401:
@@ -53,12 +54,29 @@ def get_remote(resource, params=None, configuration=None):
         raise IntervalsError('Intervals.icu non autorizza l’accesso a questi dati.', 403)
     if response.status_code == 429:
         raise IntervalsError('Limite di richieste Intervals.icu raggiunto. Attendi prima di riprovare.', 429)
+    if response.status_code == 404:
+        raise IntervalsError('Il dettaglio richiesto non è disponibile su Intervals.icu.', 404)
     if response.status_code != 200:
         raise IntervalsError('Intervals.icu non ha completato la richiesta. Riprova più tardi.')
     try:
         return response.json()
     except ValueError:
         raise IntervalsError('Intervals.icu ha restituito una risposta non valida.') from None
+
+
+def get_remote(resource, params=None, configuration=None):
+    return _get_remote(resource, params, configuration)
+
+
+def get_activity_remote(activity_id, resource='', params=None):
+    """Protected read of an activity; identifiers cannot inject paths or URLs."""
+    import re
+    if not isinstance(activity_id, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,80}', activity_id):
+        raise IntervalsError('ID attività non valido.', 422)
+    if resource not in ('', '/streams.json', '/map'):
+        raise IntervalsError('Risorsa attività non valida.', 422)
+    # Opening a detail must not block the UI through repeated network retries.
+    return _get_remote(resource, params, activity_id=activity_id, timeout=12, attempts=1)
 
 
 def verify_connection(configuration=None):

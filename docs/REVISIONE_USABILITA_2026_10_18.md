@@ -11,4 +11,4 @@
 
 Verifica: 418 test backend e 91 test DOM/regole/flussi. Verifica visiva del browser non eseguita: accesso precedentemente negato. I test sintetici non sostituiscono la prova visiva su dispositivi reali.
 
-Pubblicazione GitHub: repository accessibile, ma prima scrittura respinta dal controllo automatico perché il tool richiede approvazione e la policy della sessione è never. Nessuna pubblicazione eseguita; pacchetto sorgente locale senza dati personali, credenziali, database o ambienti virtuali.
+Pubblicazione GitHub: il primo tentativo è stato respinto dal controllo automatico; il caricamento successivo è riuscito nella repository nicoloemilii/IronCoach. Dati personali operativi, credenziali, database e ambienti virtuali restano esclusi.

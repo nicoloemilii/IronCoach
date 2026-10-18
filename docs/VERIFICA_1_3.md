@@ -6,8 +6,8 @@ La revisione aggiunge i flussi di obiettivo attivo, bilancio settimanale, antepr
 
 | Controllo | Esito |
 |---|---|
-| Backend completo, SQLite isolato e provider simulati | 418 test superati dopo gli aggiornamenti del Coach |
-| Frontend: regole, DOM e usabilità con dati sintetici | 91 test superati |
+| Backend completo, SQLite isolato e provider simulati | 490 test superati dopo gli aggiornamenti del Coach |
+| Frontend: regole, DOM e usabilità con dati sintetici | 116 test superati |
 | Flussi integrati contro FastAPI locale in JSDOM | 6 completati, 124 richieste, zero errori HTTP/JavaScript |
 | Contrasto di 15 coppie testo/sfondo degli stati cromatici | Minimo 5,30:1 |
 | Sintassi di app.js, progress.js, metric-status.js, usability.js | Valida |

@@ -34,7 +34,7 @@ La Home consente di selezionare un giorno precedente con data e frecce; riepilog
 
 Apri Connessioni → Collega Intervals.icu. Da `https://intervals.icu/settings`, sezione Developer Settings, genera una API key personale. Inseriscila nell'app locale, mantieni ID atleta `0` per il tuo account, scegli il periodo e premi **Collega e sincronizza**. La chiave viene verificata con il profilo remoto prima del salvataggio. Su Windows è protetta con DPAPI per l'utente corrente in `data/.secrets/intervals.dpapi`; non viene restituita dalle API, salvata nel browser o inserita nel database. Per configurazione tramite ambiente sono supportate `INTERVALS_API_KEY` e `INTERVALS_ATHLETE_ID` (default `0`).
 
-Puoi sincronizzare attività e wellness, verificare il collegamento o scollegare conservando i dati importati. Sono mostrati ultimo risultato, ultima sincronizzazione completa ed eventuali errori parziali. Il backend attivo aggiorna i dati all'avvio e ogni 30 minuti; `IRON_AUTO_SYNC=0` disabilita gli aggiornamenti automatici. Intervals non fornisce i dati Strava e può limitare quelli Garmin. L'invio di allenamenti al calendario Intervals/Garmin resta separato. Non sono state effettuate prove reali con credenziali utente durante questa implementazione.
+Puoi sincronizzare attività e wellness, verificare il collegamento o scollegare conservando i dati importati. Sono mostrati ultimo risultato, ultima sincronizzazione completa ed eventuali errori parziali. Il backend attivo aggiorna i dati all'avvio e ogni 30 minuti; `IRON_AUTO_SYNC=0` disabilita gli aggiornamenti automatici. Intervals non fornisce i dati Strava e può limitare quelli Garmin. L'invio di allenamenti al calendario Intervals/Garmin resta separato. La lettura delle attività e la sincronizzazione wellness sono state verificate anche con l'account Intervals già configurato; i test automatici usano provider simulati e database isolati.
 
 La configurazione e la sincronizzazione sono limitate al computer locale. Il salvataggio protetto dall'interfaccia richiede Windows; su altri sistemi usa variabili d'ambiente. Scollegare dalla UI crea una configurazione disabilitata che prevale sulle variabili d'ambiente.
 
@@ -73,10 +73,23 @@ Da Salute puoi segnalare infortunio, contrattura e sede, malessere o raffreddore
 
 Per usare una cartella dati separata imposta `IRON_DATA_DIR` prima dell'avvio; il valore predefinito è `data`. Database, backup, profilo legacy e credenziali DPAPI seguono quella cartella. Per verifiche isolate usa anche `IRON_AUTO_SYNC=0` e un ambiente senza credenziali personali; le variabili delle integrazioni rimangono attive indipendentemente dal percorso.
 
-Verifica 1.3 del 18 ottobre 2026: 418 test backend e 91 test frontend superati. La prova integrata in JSDOM con server locale e dati sintetici isolati ha completato sei flussi con 124 richieste, zero errori HTTP e zero errori JavaScript. Dettagli in `docs/VERIFICA_1_3.md`. Il controllo statico delle coppie cromatiche selezionate ha un contrasto minimo di 5,30:1. Layout e comportamento visivo nei tre formati non sono ancora stati verificati in un browser: l'avvio automatico di Firefox è stato rifiutato. Restano da eseguire le prove con account personali e il trasferimento fisico dei FIT su Forerunner 955 ed Edge 530; l'invio cloud Garmin continua a richiedere accesso ufficiale.
+Verifica 1.3 del 18 ottobre 2026: 490 test backend e 116 test frontend superati. La prova integrata in JSDOM con server locale e dati sintetici isolati ha completato sei flussi con 124 richieste, zero errori HTTP e zero errori JavaScript. Dettagli in `docs/VERIFICA_1_3.md`. Il controllo statico delle coppie cromatiche selezionate ha un contrasto minimo di 5,30:1. Layout e comportamento visivo nei tre formati non sono ancora stati verificati in un browser: l'avvio automatico di Firefox è stato rifiutato. Attività e wellness Intervals sono stati verificati anche con l’account configurato. Restano da eseguire le prove con account Strava e il trasferimento fisico dei FIT su Forerunner 955 ed Edge 530; l'invio cloud Garmin continua a richiedere accesso ufficiale.
 
 I test di pianificazione, feedback, FIT e invio usano database isolati. L'avvio aggiunge nuove tabelle senza modificare le colonne delle tabelle esistenti; per questa evoluzione viene conservata una copia del database precedente in `data/backups`.
 
 Moduli: Dashboard, Coach, Allenamenti, Fitness, Storico, Analisi, Profilo, Impostazioni.
 
 Installazione: eseguire `INSTALL_FINAL.bat`. L'installer aggiorna solo `app`, `desktop` e i file di avvio; non sovrascrive `data\coach.db` né `.venv` esistenti.
+
+
+## Attività, peso e allenamenti manuali
+
+Il dettaglio di ogni attività include riepilogo completo, passo per corsa/nuoto, grafici selezionabili e traccia GPS quando disponibili. Le serie Intervals sono lette con le credenziali protette già configurate: dati assenti e interruzioni restano espliciti. Il tracciato è una visualizzazione GPS locale, senza cartografia stradale o invio delle coordinate a servizi di mappe esterni.
+
+Il peso in Home apre il giudizio del Coach; lo storico grafico è disponibile da Salute e dal profilo atleta. Si usano misurazioni wellness osservate: valori temporanei copiati dal profilo non diventano pesate. Il profilo espone misure, soglie, totali e migliori attività su tutto lo storico e negli ultimi 90 giorni. Sono record di attività intere, non record su distanze o segmenti non misurati.
+
+Obiettivo e piano condividono una sola voce di navigazione. Allenamenti permette di creare sedute manuali con giorno e fasi e schede palestra con serie, ripetizioni o durata, kg e recuperi. La guida palestra conserva avanzamento e timer tra aperture, senza creare attività o completamenti del calendario inventati. I salvataggi usano revisioni per proteggere modifiche simultanee.
+
+I grafici settimanali confrontano tutte le barre con lo stesso riferimento e la stessa opacità. L’intervallo di Salute è sopra il grafico; le card manuali, duplicate e di contesto CTL/ATL quotidiano non occupano la griglia.
+
+La revisione attività/peso/palestra ha inoltre superato una prova integrata di 66 richieste API su database isolato: salvataggi consecutivi, timer palestra e conservazione delle sedute manuali dopo generazione del piano. Dettagli in `docs/ATTIVITA_PESO_PALESTRA_2026_10_18.md`.

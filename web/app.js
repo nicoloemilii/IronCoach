@@ -6,7 +6,7 @@ const state = { today: null, home: null, health: null, healthRange: '', coach: n
 const sports = { cycling: 'Bici', running: 'Corsa', swimming: 'Nuoto', bike: 'Bici', run: 'Corsa', swim: 'Nuoto', strength: 'Forza' };
 const statuses = { planned: 'Pianificata', completed: 'Completata', skipped: 'Saltata', cancelled: 'Sostituita', superseded: 'Sostituita' };
 const stepNames = { warmup: 'Riscaldamento', cooldown: 'Defaticamento', endurance: 'Resistenza', easy: 'Facile', interval: 'Ripetuta', recovery: 'Recupero', aerobic: 'Aerobico', tempo: 'Ritmo sostenuto', technique: 'Tecnica e controllo', strength: 'Forza' };
-const titles = { today: 'Il tuo allenamento, in chiaro.', health: 'Ascolta il tuo recupero.', coach: 'Il giudizio richiede evidenze.', calendar: 'Una settimana che funziona.', training: 'Allenati con una direzione.', activities: 'Ogni passo conta.', athlete: 'Il punto di partenza sei tu.', goal: 'Dai forma ai tuoi obiettivi.', connections: 'Connetti il tuo percorso.' };
+const titles = { today: 'Il tuo allenamento, in chiaro.', health: 'Ascolta il tuo recupero.', coach: 'Il giudizio richiede evidenze.', calendar: 'Obiettivo e piano.', training: 'Allenati con una direzione.', activities: 'Ogni passo conta.', athlete: 'Il punto di partenza sei tu.', goal: 'Dai forma ai tuoi obiettivi.', connections: 'Connetti il tuo percorso.' };
 const number = (value, digits = 0) => value == null || !Number.isFinite(Number(value)) ? '—' : Number(value).toLocaleString('it-IT', { maximumFractionDigits: digits });
 const scaled = (value, divisor) => value == null ? null : value / divisor;
 function dateString(date) { return date.toISOString().slice(0, 10); }
@@ -128,7 +128,20 @@ async function load() {
     hasGoals: hasGoals || (loaded('/goals') && loaded('/planning/profile') ? false : previous.hasGoals) };
   document.dispatchEvent(new CustomEvent('iron:loaded', { detail: window.ironViewSnapshot }));
 }
+function setPlanTab(tab) {
+  const target=tab==='goal'?'goal':'calendar';
+  $('#plan-calendar-panel').hidden=target!=='calendar';$('#goal').hidden=target!=='goal';
+  document.querySelectorAll('[data-plan-tab]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.planTab===target)));
+}
+function mergePlanSections() {
+  const calendar=$('#calendar'),goal=$('#goal'),panel=el('div');panel.id='plan-calendar-panel';
+  for(const child of [...calendar.children])if(!child.classList.contains('page-intro'))panel.append(child);
+  const tabs=el('div',null,'plan-tabs');tabs.setAttribute('role','group');tabs.setAttribute('aria-label','Obiettivo e piano');
+  for(const [id,label] of [['calendar','Il piano'],['goal','La gara e gli obiettivi']]){const tab=button(label,()=>setPlanTab(id),'outline');tab.dataset.planTab=id;tabs.append(tab);}
+  goal.classList.remove('page');calendar.append(tabs,panel,goal);setPlanTab('calendar');
+}
 function page(id, userInitiated = false) {
+  if(id==='goal'){id='calendar';setPlanTab('goal');}
   if (!Object.hasOwn(titles, id)) return;
   const previousPage=document.querySelector('.page:not([hidden])')?.id;
   const changed=previousPage!==id;
@@ -354,7 +367,7 @@ function renderTimer() {
   if (timer.running) timer.remaining = Math.max(0, Math.ceil((timer.deadline - Date.now()) / 1000));
   if (timer.running && timer.remaining === 0) stopTimer();
   $('#timer-display').textContent = `${String(Math.floor(timer.remaining / 60)).padStart(2, '0')}:${String(Math.floor(timer.remaining % 60)).padStart(2, '0')}`;
-  $('#timer-step-name').textContent = timer.steps[timer.index] ? `${timer.index + 1}/${timer.steps.length} · ${stepNames[timer.steps[timer.index].type] || timer.steps[timer.index].type}` : 'Seduta terminata: aggiungi il tuo feedback.';
+  $('#timer-step-name').textContent = timer.steps[timer.index] ? `${timer.index + 1}/${timer.steps.length} · ${timer.steps[timer.index].name || stepNames[timer.steps[timer.index].type] || timer.steps[timer.index].type}` : 'Seduta terminata: aggiungi il tuo feedback.';
 }
 setInterval(() => { if ($('#workout-dialog').open) renderTimer(); }, 500);
 $('#timer-start').addEventListener('click', () => { if (timer.steps[timer.index] && !timer.running && timer.remaining > 0) { timer.deadline = Date.now() + timer.remaining * 1000; timer.running = true; renderTimer(); } });
@@ -380,13 +393,14 @@ async function showWorkout(plan, workout = null) {
   for (const step of plan.steps || []) {
     const row = el('li'); const text = el('div');
     const target = step.target_power_w != null ? ` · ${number(step.target_power_w)} W` : step.target_pace_sec_per_km ? ` · ${number(step.target_pace_sec_per_km)} sec/km` : step.target_rpe != null ? ` · RPE ${step.target_rpe}/10` : '';
-    text.append(el('strong', stepNames[step.type] || step.type), el('small', `${number(step.duration_min)} minuti${target}`));
+    text.append(el('strong', step.name || stepNames[step.type] || step.type), el('small', `${number(step.duration_min)} minuti${target}`));
     if (step.instruction) text.append(el('p', step.instruction, 'muted')); row.append(text); steps.append(row);
   }
   root.append(steps); resetTimer(plan);
   let extraActions = $('#session-actions');
   if (!extraActions) { extraActions = el('div', null, 'action-group'); extraActions.id = 'session-actions'; $('#workout-actions').prepend(extraActions); }
   extraActions.replaceChildren();
+  if(workout?.id && plan.exercises?.length) extraActions.append(button('Segui scheda palestra →',()=>action(async()=>{$('#workout-dialog').close();await window.IronManualTraining.openGym(workout.id);}), 'primary'));
   if (!workout && !state.today?.training_paused && plan.steps?.length) extraActions.append(button('Salva questa proposta per oggi', () => action(() => saveToday(plan.sport)), 'primary'));
   else if (workout?.status === 'planned') extraActions.append(button('Ho meno tempo / sposta / salta', () => { $('#workout-dialog').close(); editSession(workout, 'shorten'); }));
   $('#feedback-form').hidden = !workout || ['skipped', 'cancelled', 'superseded'].includes(workout.status);
@@ -697,32 +711,39 @@ function addWeeklyDetails(card,key,home) {
 function svgNode(tag,attrs={},text) {
   const node=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const [key,value] of Object.entries(attrs))node.setAttribute(key,value);if(text!=null)node.textContent=text;return node;
 }
-function chartFrame(title,unit,minimum,maximum) {
+function chartFrame(title,unit,minimum,maximum,formatter=null) {
   const svg=svgNode('svg',{viewBox:'0 0 640 260',role:'img',class:'performance-chart'});svg.append(svgNode('title',{},title));
-  for(let i=0;i<=4;i++){const y=24+i*47;svg.append(svgNode('line',{x1:57,x2:620,y1:y,y2:y,stroke:'#e3eaee','stroke-dasharray':i===4?'0':'3 5'}));svg.append(svgNode('text',{x:47,y:y+4,'text-anchor':'end',class:'axis-label'},number(maximum-(maximum-minimum)*i/4,maximum<10?1:0)));}
+  for(let i=0;i<=4;i++){const y=24+i*47;svg.append(svgNode('line',{x1:57,x2:620,y1:y,y2:y,stroke:'#e3eaee','stroke-dasharray':i===4?'0':'3 5'}));svg.append(svgNode('text',{x:47,y:y+4,'text-anchor':'end',class:'axis-label'},formatter?formatter(maximum-(maximum-minimum)*i/4):number(maximum-(maximum-minimum)*i/4,maximum<10?1:0)));}
   svg.append(svgNode('text',{x:57,y:13,class:'axis-unit'},unit||''));return svg;
 }
 function weeklyChart(periods,key,assessment) {
-  const palette=window.IronCoachMetricStatus.palette, unit={hours:'ore',activities:'attività',elevation_m:'m D+',load:'punti'}[key];
-  const values=periods.map(p=>p[key]),max=Math.max(1,...values.filter(v=>v!=null))*1.18;
-  const svg=chartFrame(`Andamento ${unit}: `+periods.map(p=>`${p.start}: ${number(p[key],1)}`).join('; '),unit,0,max);svg.classList.add('weekly-chart');
-  const ref=assessment.reference, width=550/periods.length;
-  if(ref!=null){const y=212-ref/max*188;svg.append(svgNode('line',{x1:57,x2:620,y1:y,y2:y,stroke:'#536a7b','stroke-dasharray':'5 5'}));svg.append(svgNode('text',{x:615,y:y-7,'text-anchor':'end',class:'chart-reference'},'Riferimento personale'));}
-  periods.forEach((p,i)=>{const value=p[key],x=64+i*width,known=value!=null;
-    const prior=values.slice(0,i).filter(v=>v!=null&&v>0).sort((a,b)=>a-b),baseline=prior.length>=2?(prior[Math.floor((prior.length-1)/2)]+prior[Math.ceil((prior.length-1)/2)])/2:ref;
-    const ratio=baseline>0?value/baseline:null;
-    const tone=i===periods.length-1 && assessment.tone && palette[assessment.tone]?assessment.tone:!known?'unknown':ratio==null?'neutral':ratio>1.3?'critical':ratio>1.2?'caution':ratio>1.1?'watch':ratio<.7?'watch':ratio<.9?'positive':'good';
-    const color=palette[tone],height=known?Math.max(0,value)/max*188:0;
-    svg.append(svgNode('rect',{x:x+width*.18,y:212-height,width:width*.56,height:Math.max(known?3:0,height),rx:7,fill:color,opacity:i===periods.length-1?'1':'.78'}));
-    const label=svgNode('text',{x:x+width*.46,y:Math.max(26,202-height),'text-anchor':'middle',class:'chart-value'},known?number(value,1):'N/D');svg.append(label);
-    svg.append(svgNode('text',{x:x+width*.46,y:233,'text-anchor':'middle',class:'axis-label'},p.start?.slice(5).split('-').reverse().join('/')||''));
-    if(i===periods.length-1)svg.append(svgNode('text',{x:x+width*.46,y:251,'text-anchor':'middle',class:'chart-current'},'ATTUALE'));
-  });return svg;
+  const colors=window.IronCoachMetricStatus,unit={hours:'ore',activities:'attività',elevation_m:'m D+',load:'punti'}[key];
+  const ref=assessment.reference,values=periods.map(p=>p[key]).filter(v=>Number.isFinite(v));
+  const rawMax=Math.max(1,...values,ref||0),power=10**Math.floor(Math.log10(rawMax/4)),fraction=rawMax/4/power;
+  const step=(fraction<=1?1:fraction<=2?2:fraction<=2.5?2.5:fraction<=5?5:10)*power,max=Math.ceil(rawMax/step)*step;
+  const panel=el('figure',null,'chart-panel weekly-panel'),head=el('figcaption',null,'chart-panel-heading');
+  const current=periods.at(-1)?.[key];const main=el('div');main.append(el('p','ULTIMA SETTIMANA','chart-kicker'),el('strong',`${number(current,key==='activities'?0:1)} ${unit}`,'chart-kpi'));head.append(main);
+  const reference=el('div',null,'chart-comparison');reference.append(el('span','Riferimento personale'),el('strong',ref==null?'In costruzione':`${number(ref,1)} ${unit}`));head.append(reference);panel.append(head);
+  const svg=svgNode('svg',{viewBox:'0 0 680 300',role:'img',class:'performance-chart weekly-chart'});svg.append(svgNode('title',{},`Andamento ${unit}: `+periods.map(p=>`${p.start}: ${number(p[key],1)}`).join('; ')));
+  const left=48,right=662,top=22,bottom=242,plotHeight=bottom-top;
+  for(let value=0;value<=max+step/2;value+=step){const y=bottom-value/max*plotHeight;svg.append(svgNode('line',{x1:left,x2:right,y1:y,y2:y,stroke:'#e8eef2','stroke-width':1}));svg.append(svgNode('text',{x:left-12,y:y+4,'text-anchor':'end',class:'axis-label'},number(value,step%1?1:0)));}
+  if(ref!=null){const y=bottom-ref/max*plotHeight;svg.append(svgNode('line',{x1:left,x2:right,y1:y,y2:y,stroke:'#8095a2','stroke-width':1.5,'stroke-dasharray':'5 5',class:'reference-line'}));}
+  const width=(right-left)/periods.length;
+  const tooltip=el('p','Seleziona una barra per il dettaglio.','chart-tooltip');tooltip.setAttribute('role','status');
+  periods.forEach((p,i)=>{const value=p[key],known=Number.isFinite(value),x=left+(i+.5)*width,verdict=colors.weekly(value,ref),height=known?Math.max(0,value)/max*plotHeight:0;
+    const group=svgNode('g',{tabindex:'0',role:'button','aria-label':`${dayLabel(p.start)}: ${number(value,1)} ${unit}. ${verdict.label}`,'data-period':p.start});
+    const bar=svgNode('rect',{x:x-27,y:bottom-height,width:54,height:height||(!known?0:2),rx:6,fill:colors.palette[verdict.tone],opacity:'1','data-value':known?value:'','data-tone':verdict.tone});group.append(bar);
+    let labelY=Math.max(15,bottom-height-12);const referenceY=ref==null?null:bottom-ref/max*plotHeight;if(referenceY!=null && Math.abs(labelY-referenceY)<13)labelY=Math.max(15,referenceY-16);
+    group.append(svgNode('text',{x,y:labelY,'text-anchor':'middle',class:'chart-value'},known?number(value,key==='activities'?0:1):'N/D'));
+    group.append(svgNode('text',{x,y:267,'text-anchor':'middle',class:'axis-label'},dayLabel(p.start).replace(/^.*? /,'')));
+    if(i===periods.length-1){group.append(svgNode('line',{x1:x-24,x2:x+24,y1:281,y2:281,stroke:'#173e50','stroke-width':3,'stroke-linecap':'round'}));group.append(svgNode('text',{x,y:298,'text-anchor':'middle',class:'chart-current'},'ATTUALE'));}
+    const describe=()=>{tooltip.textContent=`${dayLabel(p.start)} – ${dayLabel(p.end)} · ${number(value,1)} ${unit} · ${verdict.label}`;};group.addEventListener('mouseenter',describe);group.addEventListener('focus',describe);group.addEventListener('click',describe);group.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();describe();}});svg.append(group);
+  });panel.append(svg,tooltip);return panel;
 }
 function sparkline(item,compact=false) {
   const points=(item.points||[]).filter(p=>p.value!=null&&Number.isFinite(p.value));
   if(!points.length)return el('p','Nessuna osservazione nel periodo.','empty-state');
-  const values=points.map(p=>p.value),low=Math.min(...values),high=Math.max(...values),spread=high-low||Math.max(1,high*.1),minimum=low-spread*.15,maximum=high+spread*.18;
+  const values=points.map(p=>p.value),low=Math.min(...values),high=Math.max(...values),spread=high-low||Math.max(1,high*.1),minimum=item.kind==='tsb'?low-spread*.15:Math.max(0,low-spread*.15),maximum=high+spread*.18;
   const svg=chartFrame(`${item.label}: ${points.length} osservazioni`,item.unit,minimum,maximum);if(compact)svg.classList.add('chart-compact');
   const first=Date.parse(points[0].date+'T12:00:00Z'),last=Date.parse(points.at(-1).date+'T12:00:00Z');
   const positions=points.map(p=>[last===first?335:60+550*(Date.parse(p.date+'T12:00:00Z')-first)/(last-first),212-(p.value-minimum)/(maximum-minimum)*188]);
@@ -737,20 +758,24 @@ function sparkline(item,compact=false) {
 }
 function openHealthMetric(item) {
   const root=$('#metric-detail');$('#metric-dialog-title').textContent=item.label;
-  const draw=(metric,fromDay=offsetDate(athleteDate(),-27),toDay=athleteDate())=>{showCoachJudgment(root,metricCoach(metric,state.health?.metrics||[]));root.append(sparkline(metric));
-    const form=el('form',null,'chart-range');const end=athleteDate();
+  const draw=(metric,fromDay=offsetDate(athleteDate(),-27),toDay=athleteDate())=>{
+    root.replaceChildren();root.dataset.tone='neutral';
+    const form=el('form',null,'chart-range');
     for(const [name,label,value] of [['from','Dal',fromDay],['to','Al',toDay]]){const field=el('label',label),input=el('input');input.type='date';input.name=name;input.value=value;input.required=true;field.append(input);form.append(field);}
-    const submit=el('button','Aggiorna','outline');submit.type='submit';form.append(submit);root.append(form);
-    form.addEventListener('submit',event=>{event.preventDefault();action(async()=>{const from=form.elements.from.value,to=form.elements.to.value;if(from>to)throw new Error('La data iniziale deve precedere quella finale.');const data=await api(`/health/metrics?from=${from}&to=${to}`);const found=data.metrics.find(m=>m.kind===item.kind);draw(found||{...item,points:[],latest:null},from,to);});});
+    const submit=el('button','Aggiorna','outline');submit.type='submit';form.append(submit);
+    const panel=el('figure',null,'chart-panel');panel.append(el('figcaption',`${metric.label} · ${metric.unit}`,'chart-panel-heading'),sparkline(metric));
+    const verdict=el('section',null,'health-coach-detail');showCoachJudgment(verdict,metricCoach(metric,state.health?.metrics||[]));
+    root.append(form,panel,verdict);
+    form.addEventListener('submit',event=>{event.preventDefault();const from=form.elements.from.value,to=form.elements.to.value;action(async()=>{if(from>to)throw new Error('La data iniziale deve precedere quella finale.');const data=await api(`/health/metrics?from=${from}&to=${to}`);const found=data.metrics.find(m=>m.kind===item.kind);draw(found||{...item,points:[],latest:null},from,to);});});
   };draw(item);$('#metric-dialog').showModal();
 }
 function renderHealth(value) {
   $('#health-status').textContent='';
   const form=$('#health-range');if(!form.dataset.dirty){form.elements.from.value=value.from;form.elements.to.value=value.to;}
   const root=$('#health-metrics');root.replaceChildren();
-  for(const item of value.metrics||[]){const card=el('article',null,'card health-card clickable-card'),latest=item.latest;
+  for(const item of value.metrics||[]){if(['stress_score','stress_level','steps','daily_activity_load','daily_ctl_load','daily_atl_load','body_battery_min','body_battery_max'].includes(item.kind))continue;if(item.kind==='body_battery'&&!item.latest)continue;const card=el('article',null,'card health-card clickable-card'),latest=item.latest;
     card.append(el('h2',item.label),el('strong',latest?`${number(latest.value,1)} ${item.unit}`:'N/D','health-value'),sparkline(item,true));
-    const verdict=window.IronCoachMetricStatus.metric(item,value.metrics||[]);window.IronCoachMetricStatus.apply(card,verdict,false);
+    const verdict=window.IronCoachMetricStatus.metric(item,value.metrics||[]);if(verdict.label==='Dato di contesto')continue;window.IronCoachMetricStatus.apply(card,verdict,false);
     const open=button('Analisi e andamento ↗',()=>openHealthMetric(item),'metric-open');open.setAttribute('aria-label',`Apri ${item.label}`);open.setAttribute('aria-haspopup','dialog');card.append(open);root.append(card);
   }
 }
@@ -774,14 +799,50 @@ function renderCoach(value) {
     const saved = state.workouts.find(w => w.id === workout.id); if (saved) card.append(button('Apri la seduta', () => action(() => showWorkout(saved.payload, saved)), 'text-button')); root.append(card);
   }
 }
+function timeLabel(seconds) {
+  if(!Number.isFinite(seconds))return '—';const value=Math.max(0,Math.round(seconds)),h=Math.floor(value/3600),m=Math.floor(value%3600/60),sec=value%60;return h?`${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`:`${m}:${String(sec).padStart(2,'0')}`;
+}
+function activityStreamChart(series) {
+  const converted={...series,unit:series.kind==='speed'?'km/h':series.kind==='distance'?'km':series.unit,points:series.points.map(p=>({...p,value:p.value==null?null:series.kind==='speed'?p.value*3.6:series.kind==='distance'?p.value/1000:p.value}))};
+  const usable=converted.points.filter(p=>Number.isFinite(p.time_s)&&Number.isFinite(p.value));if(!usable.length)return el('p','Serie non disponibile.','empty-state');
+  const raw=usable.map(p=>p.value),min=Math.min(...raw),max=Math.max(...raw),padding=(max-min||Math.max(1,max*.1))*.12;
+  const low=['altitude','temperature'].includes(series.kind)?min-padding:Math.max(0,min-padding);
+  const svg=chartFrame(`${converted.label} durante l’attività`,converted.unit,low,max+padding,series.kind==='pace'?timeLabel:null);svg.classList.add('activity-stream-chart');
+  const chartLow=low,high=max+padding,first=Math.min(...usable.map(p=>p.time_s)),last=Math.max(...usable.map(p=>p.time_s)),span=last-first||1;
+  const color={power:'#bc602c',heart_rate:'#d33850',speed:'#177c86',pace:'#5769ae',altitude:'#657c4b',cadence:'#8970ac',temperature:'#bd7d24',distance:'#45718d'}[series.kind]||'#177c86';
+  let segment=[];const flush=()=>{if(segment.length)svg.append(svgNode('polyline',{points:segment.map(p=>p.join(',')).join(' '),fill:'none',stroke:color,'stroke-width':2.2,'stroke-linejoin':'round','stroke-linecap':'round'}));segment=[];};
+  for(const point of converted.points){if(!Number.isFinite(point.time_s)||!Number.isFinite(point.value)){flush();continue;}segment.push([60+550*(point.time_s-first)/span,212-188*(point.value-chartLow)/(high-chartLow||1)]);}flush();
+  for(const [position,value]of [[60,first],[335,(first+last)/2],[610,last]])svg.append(svgNode('text',{x:position,y:239,'text-anchor':'middle',class:'axis-label'},timeLabel(value)));
+  return svg;
+}
+function activityRoute(route) {
+  const panel=el('figure',null,'activity-route-panel chart-panel');panel.append(el('figcaption','Percorso GPS','chart-panel-heading'));
+  if(!route?.available||route.points?.length<2){panel.append(el('p','Percorso GPS non disponibile per questa attività.','empty-state'));return panel;}
+  const points=route.points,lat=points.reduce((sum,p)=>sum+p.lat,0)/points.length,scale=Math.max(.01,Math.cos(lat*Math.PI/180));
+  const xy=points.map(p=>[p.lon*scale,-p.lat]),xs=xy.map(p=>p[0]),ys=xy.map(p=>p[1]),minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys),factor=Math.min(580/(maxX-minX||.0001),240/(maxY-minY||.0001));
+  const mapped=xy.map(p=>[340+(p[0]-(minX+maxX)/2)*factor,150+(p[1]-(minY+maxY)/2)*factor]);
+  const svg=svgNode('svg',{viewBox:'0 0 680 300',role:'img',class:'activity-route'});svg.append(svgNode('title',{},`Traccia GPS con ${points.length} punti osservati`));svg.append(svgNode('rect',{x:0,y:0,width:680,height:300,fill:'#f1f6f5',rx:14}));
+  for(let x=0;x<680;x+=40)svg.append(svgNode('line',{x1:x,x2:x,y1:0,y2:300,stroke:'#e1ebe7'}));for(let y=0;y<300;y+=40)svg.append(svgNode('line',{x1:0,x2:680,y1:y,y2:y,stroke:'#e1ebe7'}));
+  svg.append(svgNode('polyline',{points:mapped.map(p=>p.join(',')).join(' '),fill:'none',stroke:'#174f65','stroke-width':3.2,'stroke-linecap':'round','stroke-linejoin':'round'}));
+  for(const [point,color,label]of [[mapped[0],'#168354','Partenza'],[mapped.at(-1),'#ce3c43','Arrivo']]){const dot=svgNode('circle',{cx:point[0],cy:point[1],r:6,fill:color,stroke:'#fff','stroke-width':2});dot.append(svgNode('title',{},label));svg.append(dot);}
+  let zoom=1;const controls=el('div',null,'route-controls');for(const [label,multiplier]of [['−',1/1.4],['+',1.4]]){const control=button(label,()=>{zoom=Math.max(1,Math.min(6,zoom*multiplier));svg.setAttribute('viewBox',`${340-340/zoom} ${150-150/zoom} ${680/zoom} ${300/zoom}`);},'outline');control.setAttribute('aria-label',multiplier>1?'Ingrandisci percorso':'Riduci percorso');controls.append(control);}panel.append(svg,controls);return panel;
+}
+let activityDetailVersion=0;
 async function showActivity(activity) {
-  const root = $('#activity-detail'); root.replaceChildren(el('h2', activity.name || sports[activity.sport]), el('p', 'Caricamento giudizio…'));
-  root.dataset.tone = 'unknown';
-  $('#activity-dialog').showModal();
-  try {
-    const result = await api(`/activities/${activity.id}/assessment`); assessmentContent(root, result, activity.name || sports[activity.sport]);
-    root.append(el('h3', 'Benefici e contesto'), el('p', result.benefits), el('p', `${activityDate(activity.start_time)} · ${sourceLabel(activity.source)} · ${number(scaled(activity.duration_seconds, 60))} minuti`, 'caption'));
-  } catch (error) { root.dataset.tone = 'unknown'; root.replaceChildren(el('h2', 'Valutazione non disponibile'), el('p', error.message, 'muted')); throw error; }
+  const version=++activityDetailVersion,root=$('#activity-detail');root.replaceChildren(el('h2',activity.name||'Attività'),el('p','Caricamento attività…'));root.dataset.tone='neutral';$('#activity-dialog').showModal();
+  const results=await Promise.allSettled([api(`/activities/${activity.id}/detail`),api(`/activities/${activity.id}/assessment`)]);if(version!==activityDetailVersion)return;
+  const detail=results[0].status==='fulfilled'?results[0].value:{...activity,summary:activity,streams:[],route:null},rating=detail.coach_rating||(results[1].status==='fulfilled'?results[1].value:null);
+  const header=el('div',null,'activity-overview');header.append(el('p',`${sports[detail.sport]||detail.sport||'Sport'}${detail.start_time?' · '+dayLabel(activityDate(detail.start_time)):''}`,'eyebrow'),el('h2',detail.name||activity.name||'Attività'));
+  const stats=el('div',null,'activity-stat-grid'),data=detail.summary||activity;
+  const isSwim=/swim|nuoto/i.test(detail.sport||''),isRun=/run|corsa/i.test(detail.sport||'');
+  for(const [label,value,unit,formatter]of [['Passo medio',isSwim?data.avg_pace_seconds_per_100m:isRun?data.avg_pace_seconds_per_km:null,isSwim?'/100 m':'/km',v=>timeLabel(v)+(isSwim?' /100 m':' /km')],['Durata',data.duration_seconds,'',timeLabel],['Distanza',scaled(data.distance_meters,1000),'km'],['Dislivello',data.elevation_gain_meters,'m D+'],['Velocità media',data.avg_speed==null?null:data.avg_speed*3.6,'km/h'],['FC media',data.avg_hr,'bpm'],['FC massima',data.max_hr,'bpm'],['Potenza media',data.avg_power,'W'],['Potenza normalizzata',data.normalized_power,'W'],['Cadenza',data.avg_cadence,'/min'],['Energia',data.calories,'kcal'],['Carico',data.load,'punti']]){
+    if(value==null)continue;const card=el('div',null,'activity-stat');card.append(el('small',label),el('strong',formatter?formatter(value):`${number(value,['km','km/h'].includes(unit)?1:0)} ${unit}`));stats.append(card);
+  }header.append(stats);root.replaceChildren(header,activityRoute(detail.route));
+  if(detail.streams?.length){const panel=el('section',null,'activity-stream-panel chart-panel'),top=el('div',null,'chart-panel-heading'),label=el('label','Andamento'),select=el('select');select.name='activity_stream';
+    for(const stream of detail.streams){const option=el('option',stream.label);option.value=stream.kind;select.append(option);}label.append(select);top.append(label);panel.append(top);const chart=el('div');panel.append(chart);const draw=()=>{const stream=detail.streams.find(s=>s.kind===select.value);chart.replaceChildren(activityStreamChart(stream));};select.addEventListener('change',draw);draw();root.append(panel);
+  }else root.append(el('p',detail.availability?.message||'I riepiloghi sono disponibili; questa attività non contiene serie temporali.','caption'));
+  if(rating){const coach=el('section',null,'activity-coach');assessmentContent(coach,rating,'IL COACH SULLA SEDUTA');root.append(coach);}else{const coach=el('section',null,'activity-coach');coach.dataset.tone='unknown';coach.append(el('h3','Valutazione non disponibile'),el('p','Il riepilogo resta consultabile. Riprova per aggiornare il giudizio.'),button('Riprova',()=>action(()=>showActivity(activity))));root.append(coach);}
+  if(detail.provider_url){const link=el('a','Apri attività originale ↗','button-link outline');const url=new URL(detail.provider_url);if(url.protocol==='https:'&&url.hostname==='intervals.icu'){link.href=url.href;link.target='_blank';link.rel='noopener noreferrer';root.append(link);}}
 }
 function renderDuplicates(values) {
   $('#duplicate-card').hidden = !values.length; const root = $('#duplicate-list'); root.replaceChildren();
@@ -931,9 +992,10 @@ function addStravaConnection() {
 $('#current-date').textContent = new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date()).toUpperCase();
 $('#backend-origin').textContent = location.origin;
 $('#metrics').replaceChildren(...['Fitness · CTL', 'Fatica · ATL', 'Bilancio · TSB', 'Recupero'].map(label => metric(label, '—', 'In attesa dei dati')));
-enhanceProfile(); addImportTools(); addIntervalsConnection(); addStravaConnection(); page(location.hash.slice(1) || 'today'); action(load);
+mergePlanSections(); enhanceProfile(); addImportTools(); addIntervalsConnection(); addStravaConnection(); page(location.hash.slice(1) || 'today'); action(load);
 window.IronCoachUI = { api, action, load, el, button, number, sourceLabel, sparkline,
-  openHealthMetric,
+  openHealthMetric, openWorkout:showWorkout,
+  openActivity: id=>action(()=>showActivity(state.activities.find(a=>a.id===id)||{id})),
   context: () => ({weekStart:state.weekStart, revision:state.settingsRevision, raceGoalId:state.settings?.race_goal_id}),
   navigate: id => page(id, true),
   resetAfterRestore: () => {
