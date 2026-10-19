@@ -7,8 +7,10 @@ invented FTP, RPE or zero load; confidence remains separate from the score.
 import json
 import math
 from collections import defaultdict, deque
+from bisect import bisect_right
 from datetime import timedelta
 from statistics import median
+from types import SimpleNamespace
 
 from app.db.iron_models import ActivityObservation, HealthMetric, RaceGoal
 from app.db.models import Activity, DailyMetrics
@@ -79,8 +81,12 @@ def _distribution(activity, load, history, loads):
     # are required; absence of early history is not an empty training week.
     if not history or as_utc_naive(history[0].start_time) > stamp - timedelta(days=21):
         return None
-    groups = [[row for row in history if stamp - timedelta(days=7*(index+1)) <= as_utc_naive(row.start_time)
-               < stamp - timedelta(days=7*index)] for index in range(4)]
+    boundaries = [stamp - timedelta(days=7*index) for index in range(4, -1, -1)]
+    groups = [[], [], [], []]
+    for row in history:
+        slot = bisect_right(boundaries, as_utc_naive(row.start_time)) - 1
+        if 0 <= slot < 4:
+            groups[3-slot].append(row)
     current = groups[0] + [activity]
     use_load = load is not None and all(loads[row.id] is not None for row in history)
     def total(rows):
@@ -228,6 +234,12 @@ def activity_ratings(db, activities=None, *, loads=None, now=None):
     health = _health_index(db)
     goal, legs = _current_goal(db)
     now = as_utc_naive(now or utc_now_naive())
+    # Rating repeatedly reads a bounded recent history. Plain immutable-by-use
+    # snapshots avoid hundreds of thousands of SQLAlchemy attribute lookups;
+    # they never mutate or detach the persisted Activity objects.
+    activities = [SimpleNamespace(**{key: getattr(row, key) for key in
+                  ('id', 'sport', 'start_time', 'duration_seconds', 'avg_hr', 'avg_power', 'normalized_power')})
+                  for row in activities]
     history = deque(); result = {}
     for activity in sorted(activities, key=lambda row: (as_utc_naive(row.start_time), row.id)):
         stamp = as_utc_naive(activity.start_time)

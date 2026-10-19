@@ -217,7 +217,7 @@ def _occupancy(db: Session, start: date, rows: list[Workout]) -> Counter:
     pending, completed = Counter(), Counter()
     transitions = set()
     for row in rows:
-        if row.status not in ("skipped", "superseded"):
+        if row.status not in ("skipped", "superseded", "cancelled"):
             (completed if row.status == "completed" else pending)[row.date] += row.duration_min
             brick = json.loads(row.payload_json).get('brick', {})
             if brick.get('sequence') == 1:
@@ -544,7 +544,7 @@ def get_week(db: Session, value=None) -> dict:
                 if window['restricted']:
                     session['payload']['time_window'] = window
         sessions.sort(key=lambda row: (row["payload"].get("brick", {}).get("group_id", ""), row["payload"].get("brick", {}).get("sequence", 0), row["id"]))
-        active = [row for row in sessions if row["status"] != "skipped"]
+        active = [row for row in sessions if row["status"] not in ("skipped", "superseded", "cancelled")]
         for row in active:
             bucket = summary.setdefault(row["sport"], {"sessions": 0, "minutes": 0, "completed_minutes": 0})
             bucket["sessions"] += 1

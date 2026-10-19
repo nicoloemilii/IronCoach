@@ -2,9 +2,9 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from datetime import date as Date
-from typing import Literal
+from typing import Annotated, Literal
 from pydantic import BaseModel, Field, ConfigDict, model_validator
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.db.models import Activity, DailyMetrics, Workout, WorkoutEvaluation, AthleteAdaptation
@@ -12,7 +12,7 @@ from app.services.coach import coach_today
 from app.services.readiness import calculate_daily_state
 from app.services.workout_engine import generate_workout
 from app.services.evaluation import evaluate_workout
-from app.services.training_load import fitness_metrics
+from app.services.training_load import fitness_metrics, activity_load_snapshot
 from app.services.athlete_profile import load_profile
 from app.services.adaptation import adaptation_context
 from app.services.matching import match_workout_activity, activity_to_actual
@@ -20,7 +20,7 @@ from app.services.historical_learning import build_historical_profile
 from app.services.historical_capacity import build_historical_capacity
 from app.services.athlete_state import build_athlete_state
 from app.services.decision_engine import decide_training
-from app.services.athlete_clock import athlete_today
+from app.services.athlete_clock import athlete_today, activity_day
 
 router = APIRouter()
 
@@ -29,7 +29,12 @@ def _metrics_row(row):
     return {k:getattr(row,k) for k in ('sleep_hours','hrv_ms','hrv_baseline_ms','resting_hr_bpm','resting_hr_baseline_bpm','stress_score','steps','daily_activity_load','body_battery')}
 
 @router.get('/coach/today')
-def get_coach_today(ftp_watts: float | None = None, db: Session = Depends(get_db)):
+def get_coach_today(ftp_watts: Annotated[float | None, Query(gt=0, allow_inf_nan=False)] = None, db: Session = Depends(get_db)):
+    with activity_load_snapshot(db):
+        return _get_coach_today(ftp_watts, db)
+
+
+def _get_coach_today(ftp_watts, db):
     activities = db.query(Activity).filter(Activity.start_time <= datetime.utcnow()).order_by(Activity.start_time.asc()).all()
     profile = load_profile()
     from app.services.planning import load_settings
@@ -65,7 +70,7 @@ def get_coach_today(ftp_watts: float | None = None, db: Session = Depends(get_db
     last_adaptation = adaptation_rows[0] if adaptation_rows else None
     adaptation = {**ctx, 'source_workout_id': last_adaptation.source_workout_id if last_adaptation else None}
 
-    historical = build_historical_profile(activities, ftp)
+    historical = build_historical_profile(activities, ftp, reference_date=base['date'])
     historical_capacity = build_historical_capacity(historical)
     state = build_athlete_state(activities, metrics, base['fitness'], historical_capacity, adaptation, ftp, base['date'])
     from app.db.experience_models import AthleteCheckin
@@ -127,6 +132,12 @@ class DailyMetricsInput(BaseModel):
     daily_activity_load: float | None = Field(None, ge=0, le=3000)
     body_battery: float | None = Field(None, ge=0, le=100)
 
+    @model_validator(mode='after')
+    def observed_date(self):
+        if self.date is not None and not Date(1970, 1, 1) <= self.date <= athlete_today():
+            raise ValueError('Le metriche osservate richiedono una data dal 1970 a oggi.')
+        return self
+
 
 @router.put('/coach/daily-metrics')
 def upsert_daily_metrics(payload: DailyMetricsInput, db: Session = Depends(get_db)):
@@ -141,8 +152,10 @@ def upsert_daily_metrics(payload: DailyMetricsInput, db: Session = Depends(get_d
     return {'status':'saved','date':day,'metrics':_metrics_row(row)}
 
 @router.get('/coach/readiness')
-def get_readiness(date: str | None = None, db: Session = Depends(get_db)):
-    day = datetime.fromisoformat(date).date() if date else athlete_today()
+def get_readiness(date: Date | None = None, db: Session = Depends(get_db)):
+    day = date or athlete_today()
+    if not Date(1970, 1, 1) <= day <= athlete_today():
+        raise HTTPException(422, 'Scegli una data dal 1970 a oggi.')
     acts=db.query(Activity).order_by(Activity.start_time.asc()).all()
     row=db.query(DailyMetrics).filter(DailyMetrics.date==str(day)).first()
     from app.services.health import effective_metrics
@@ -218,14 +231,22 @@ def _reviewable_workout(db: Session, workout_id: int):
     row = workout_row(db, workout_id)
     if row.status in ('skipped', 'cancelled', 'superseded'):
         raise HTTPException(409, 'La seduta è stata rimossa dal piano.')
-    if Date.fromisoformat(row.date) > datetime.utcnow().date():
+    if Date.fromisoformat(row.date) > athlete_today():
         raise HTTPException(409, 'Puoi valutare la seduta dal giorno programmato.')
     return row
 
 
 @router.post('/coach/workouts/{workout_id}/evaluate')
 def evaluate(workout_id: int, payload: LegacyEvaluationInput, db: Session = Depends(get_db)):
-    from app.api.routes_experience import Feedback, save_feedback
+    try:
+        return _evaluate_feedback(workout_id, payload, db)
+    except Exception:
+        db.rollback()
+        raise
+
+
+def _evaluate_feedback(workout_id: int, payload: LegacyEvaluationInput, db: Session):
+    from app.api.routes_experience import Feedback, persist_feedback
     from app.db.experience_models import SessionFeedback
 
     row = _reviewable_workout(db, workout_id)
@@ -242,8 +263,8 @@ def evaluate(workout_id: int, payload: LegacyEvaluationInput, db: Session = Depe
         completion = min(100.0, duration / row.duration_min * 100) if duration is not None and row.duration_min > 0 else 100.0
     # This shared path owns association checks and a single feedback/evaluation/
     # adaptation per workout, including when a legacy client retries a save.
-    content = save_feedback(workout_id, Feedback(rpe=payload.rpe, completion_percent=completion,
-                            activity_id=payload.activity_id, feeling=payload.feeling, notes=payload.notes), db)
+    content = persist_feedback(workout_id, Feedback(rpe=payload.rpe, completion_percent=completion,
+                            activity_id=payload.activity_id, feeling=payload.feeling, notes=payload.notes), db, commit=False)
 
     actual = dict(content['actual'])
     provided = payload.model_dump(exclude_none=True, include={'steps', 'avg_power_w', 'normalized_power_w', 'avg_hr_bpm', 'load'})
@@ -298,7 +319,7 @@ def match(workout_id: int, payload: LegacyMatchInput | None = None, db: Session 
             raise HTTPException(409, 'Attività già associata a un’altra seduta.')
         if sport_key(requested.sport) != sport_key(row.sport):
             raise HTTPException(422, 'La disciplina non corrisponde alla seduta.')
-        if abs((requested.start_time.date() - Date.fromisoformat(row.date)).days) > 2:
+        if abs((activity_day(requested.start_time) - Date.fromisoformat(row.date)).days) > 2:
             raise HTTPException(422, 'La data dell’attività è troppo distante dalla seduta.')
     result = match_workout_activity(json.loads(row.payload_json), [a for a in activities if a.id not in used], str(row.date), payload.activity_id)
     result = {key: value for key, value in result.items() if key != 'activity'}

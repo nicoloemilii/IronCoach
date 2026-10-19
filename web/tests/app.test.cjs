@@ -183,6 +183,27 @@ test('all main detail dialogs place the back action before their title',async t=
   }
 });
 
+test('skip to content preserves the current route and moves keyboard focus into main', async t => {
+  const { $, w, flush } = await setup(t);
+  $('nav [data-page="activities"]').click(); await flush();
+  assert.equal(w.location.hash, '#activities');
+  $('.skip-link').focus(); $('.skip-link').click(); await flush();
+  assert.equal(w.location.hash, '#activities'); assert.equal($('#activities').hidden, false);
+  assert.equal(w.document.activeElement, $('#main-content'));
+});
+
+test('section navigation closes detail dialogs without discarding their unfinished form', async t => {
+  const { $, w, flush } = await setup(t);
+  $('#workouts .list-row').click(); await flush(); assert.equal($('#workout-dialog').open, true);
+  $('#feedback-form [name="notes"]').value = 'Appunto non salvato';
+  $('#feedback-form').dataset.dirty = 'true';
+  w.IronCoachUI.navigate('health'); await flush();
+  assert.equal($('#workout-dialog').open, false); assert.equal($('#health').hidden, false);
+  assert.equal($('#feedback-form [name="notes"]').value, 'Appunto non salvato');
+  assert.equal($('#feedback-form').dataset.dirty, 'true');
+  assert.equal(w.location.hash, '#health');
+});
+
 test('health chart shades only a supported personal range and labels it as descriptive',async t=>{
   const {w,$,flush}=await setup(t);const points=Array.from({length:10},(_,i)=>({date:plusDays('2026-10-07',i),value:48+i%4,source:'intervals'}));
   w.IronCoachUI.openHealthMetric({kind:'hrv_ms',label:'HRV',unit:'ms',points,latest:points.at(-1),stale:false});await flush();

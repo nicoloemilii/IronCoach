@@ -111,3 +111,41 @@ test('unchanged refreshes keep an onboarding link focused instead of replacing i
   assert.equal(window.document.activeElement, link);
   assert.equal($('#getting-started-steps a'), link);
 });
+
+test('setup completion moves focus from disappearing guidance to visible content', t => {
+  const { $, window, loaded } = setup(t);
+  loaded({hasProfile:true,hasActivities:false});
+  $('#getting-started-steps a').focus();
+  loaded({hasProfile:true,hasActivities:true});
+  assert.equal($('#getting-started').hidden, true);
+  assert.equal(window.document.activeElement, $('#today .section-heading h2'));
+});
+
+test('changed guidance retains the matching action or advances to the remaining step', t => {
+  const { $, window, loaded } = setup(t);
+  loaded({hasProfile:false,hasActivities:false,intervalsConfigured:false});
+  const connections = $('#getting-started-steps a[href="#connections"]'); connections.focus();
+  loaded({hasProfile:false,hasActivities:false,intervalsConfigured:true});
+  assert.notEqual($('#getting-started-steps a[href="#connections"]'), connections);
+  assert.equal(window.document.activeElement, $('#getting-started-steps a[href="#connections"]'));
+  $('#getting-started-steps a[href="#athlete"]').focus();
+  loaded({hasProfile:true,hasActivities:false,intervalsConfigured:true});
+  assert.equal(window.document.activeElement, $('#getting-started-steps a[href="#connections"]'));
+});
+
+test('an optional goal link becoming hidden leaves focus on a usable setup action', t => {
+  const { $, window, loaded } = setup(t);
+  loaded({hasProfile:false,hasActivities:false,hasGoals:false});
+  $('#getting-started-goal a').focus();
+  loaded({hasProfile:false,hasActivities:false,hasGoals:true});
+  assert.equal($('#getting-started-goal').hidden, true);
+  assert.equal(window.document.activeElement, $('#getting-started-steps a'));
+});
+
+test('the browser title names the current section without including personal data', t => {
+  const { window, page } = setup(t);
+  assert.equal(window.document.title, 'Home · Iron Coach');
+  page('health', true); assert.equal(window.document.title, 'Salute · Iron Coach');
+  page('activities', false); assert.equal(window.document.title, 'Attività · Iron Coach');
+  page('missing-section', true); assert.equal(window.document.title, 'Attività · Iron Coach');
+});

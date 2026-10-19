@@ -7,6 +7,7 @@ from app.commercial.config import from_env
 from app.commercial.accounts import Store
 from app.commercial.middleware import ProductBoundary
 from app.commercial import routes, billing
+from app.api.errors import request_validation_error
 
 
 def install(app,settings=None,folder=None):
@@ -21,9 +22,7 @@ def install(app,settings=None,folder=None):
     app.include_router(routes.router);app.include_router(billing.router)
     app.add_middleware(ProductBoundary,settings=cfg,accounts=app.state.accounts)
 
-    @app.exception_handler(RequestValidationError)
-    async def validation_error(request,exc):
-        return JSONResponse({'detail':[{'loc':e['loc'],'msg':e['msg'],'type':e['type']} for e in exc.errors()]},422)
+    app.add_exception_handler(RequestValidationError, request_validation_error)
 
     @app.get('/login',include_in_schema=False)
     def login_page(): return FileResponse(Path(__file__).resolve().parents[2]/'web'/'login.html',headers={'Cache-Control':'no-cache'})

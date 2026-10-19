@@ -92,6 +92,11 @@ def workout_review(workout_id: int, db: Session = Depends(get_db)):
 
 @router.put('/workouts/{workout_id}/feedback')
 def save_feedback(workout_id: int, payload: Feedback, db: Session = Depends(get_db)):
+    return persist_feedback(workout_id, payload, db)
+
+
+def persist_feedback(workout_id: int, payload: Feedback, db: Session, *, commit: bool = True):
+    """Share the ledger while allowing callers to finish one atomic evaluation."""
     row = workout_row(db, workout_id)
     if row.status in ('skipped', 'cancelled', 'superseded'):
         raise HTTPException(409, 'La seduta è stata rimossa dal piano.')
@@ -131,7 +136,10 @@ def save_feedback(workout_id: int, payload: Feedback, db: Session = Depends(get_
     db.add(AthleteAdaptation(sport=row.sport, adaptation=result['adaptation'], source_workout_id=workout_id,
                              confidence=75 if source == 'activity' else 50, note=payload.notes or result['note']))
     row.status = 'completed'
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     return content
 
 

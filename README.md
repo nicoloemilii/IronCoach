@@ -6,7 +6,7 @@ La modalità **hosted** aggiunge account separati, registrazione su invito o con
 
 Sono inclusi Docker/Caddy, configurazione di esempio, dipendenze bloccate, CI, backup operativo cifrato e ripristino in una cartella nuova. **Non è stata attivata una vendita pubblica**: dominio, hosting, pagamenti, email e documenti del titolare richiedono configurazione e collaudo reali. [Avvio, operazioni e limiti della beta](docs/COMMERCIAL_BETA.md). Desktop/iOS conservano lo stato precedente; non sono il canale commerciale di questa beta.
 
-Verifica della revisione: 619 test backend, 144 frontend e prova integrata hosted con due account e 88 richieste. Build Docker e controlli Linux/Windows verificati su GitHub. Layout nel browser e servizi esterni reali restano da collaudare.
+Revisione del 19 ottobre: 755 test backend, 170 frontend, prova HTTP sulle otto sezioni e 100 letture concorrenti. Verificata la navigazione nel browser a 375, 768 e 1440 px. Aggiunti insights sulla continuità, confronto tra discipline e revisione dei possibili doppioni. [Risultati, prestazioni e limiti della verifica](docs/APP_AUDIT_2026_10_19.md). Servizi esterni e dispositivi reali restano da collaudare.
 
 ## Interfaccia web
 

@@ -12,7 +12,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.api import routes_coach, routes_experience
-from app.db import experience_models, garmin_models, planning_models  # register metadata
+from app.db import experience_models, garmin_models, planning_models, health_reports, sync_models  # register metadata
 from app.db.database import Base, get_db
 from app.db.experience_models import ActivityIdentity, AthleteCheckin, SessionFeedback
 from app.db.iron_models import DuplicateCandidate
@@ -125,6 +125,19 @@ def test_explicit_null_checkin_clears_metric_used_for_readiness(experience_api):
         row = session.query(DailyMetrics).one()
         assert row.sleep_hours is None
         assert row.stress_score is None
+
+
+def test_coach_does_not_present_old_training_capacity_as_recent(experience_api):
+    client, factory, today = experience_api
+    _activity(factory, today, start_time=datetime.combine(today - timedelta(days=500), datetime.min.time()) + timedelta(hours=8))
+    response = client.get('/coach/today')
+    assert response.status_code == 200
+    day = response.json()
+    assert day['historical']['reference_date'] == day['date']
+    assert day['historical']['all_time']['activities'] == 1
+    assert day['historical']['recent_90d']['activities'] == 0
+    assert day['historical']['recent_12m']['activities'] == 0
+    assert day['historical_capacity']['sports']['cycling']['recent_90d']['activities'] == 0
 
 
 def test_feedback_edits_do_not_inflate_adaptation_trend(experience_api):

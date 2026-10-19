@@ -38,7 +38,7 @@ def _serialize(activity: Activity, ftp_watts: float, rating=None, load=None):
 
 @router.get("/activities")
 def get_activities(
-    ftp_watts: float = Query(170.0, gt=0, description="FTP ciclismo in watt usato per il calcolo TSS"),
+    ftp_watts: float = Query(170.0, gt=0, allow_inf_nan=False, description="FTP ciclismo in watt usato per il calcolo TSS"),
     db: Session = Depends(get_db),
 ):
     activities = db.query(Activity).order_by(Activity.start_time.desc()).all()
@@ -50,7 +50,7 @@ def get_activities(
 @router.get("/analysis/summary")
 def get_analysis_summary(
     days: int = Query(28, ge=1, le=365),
-    ftp_watts: float = Query(170.0, gt=0, description="FTP ciclismo in watt usato per il calcolo TSS"),
+    ftp_watts: float = Query(170.0, gt=0, allow_inf_nan=False, description="FTP ciclismo in watt usato per il calcolo TSS"),
     db: Session = Depends(get_db),
 ):
     return training_summary(db, days=days, ftp_watts=ftp_watts)
@@ -58,7 +58,7 @@ def get_analysis_summary(
 
 @router.get("/analysis/fitness")
 def get_fitness_metrics_legacy(
-    ftp_watts: float = Query(170.0, gt=0),
+    ftp_watts: float = Query(170.0, gt=0, allow_inf_nan=False),
     db: Session = Depends(get_db),
 ):
     activities = db.query(Activity).order_by(Activity.start_time.asc()).all()
@@ -72,7 +72,7 @@ def get_fitness_metrics_legacy(
 
 @router.get("/analysis/fitness/sports")
 def get_fitness_by_sport_legacy(
-    ftp_watts: float = Query(170.0, gt=0),
+    ftp_watts: float = Query(170.0, gt=0, allow_inf_nan=False),
     db: Session = Depends(get_db),
 ):
     activities = db.query(Activity).order_by(Activity.start_time.asc()).all()
@@ -86,7 +86,7 @@ def get_fitness_by_sport_legacy(
 
 @router.get("/analysis/quality")
 def get_data_quality_legacy(
-    ftp_watts: float = Query(170.0, gt=0),
+    ftp_watts: float = Query(170.0, gt=0, allow_inf_nan=False),
     db: Session = Depends(get_db),
 ):
     activities = db.query(Activity).order_by(Activity.start_time.asc()).all()

@@ -16,6 +16,7 @@ from app.db import experience_models, garmin_models, planning_models
 from app.db.database import Base, get_db
 from app.db.experience_models import SessionFeedback
 from app.db.models import Activity, AthleteAdaptation, Workout, WorkoutEvaluation
+from app.services import athlete_clock
 
 
 @pytest.fixture
@@ -225,3 +226,58 @@ def test_explicit_match_validates_sport_date_and_existence(legacy_api):
 def test_match_rejects_future_removed_missing_workout(legacy_api, workout_id, code):
     client, _, _ = legacy_api
     assert client.post(f'/coach/workouts/{workout_id}/match').status_code == code
+
+
+@pytest.mark.parametrize('existing_feedback', [False, True])
+def test_legacy_evaluation_failure_rolls_back_the_entire_feedback_ledger(legacy_api, monkeypatch, existing_feedback):
+    from app.api import routes_coach
+
+    client, factory, _ = legacy_api
+    if existing_feedback:
+        assert client.post('/coach/workouts/1/evaluate', json={'rpe': 3, 'duration_min': 30}).status_code == 200
+    with factory() as session:
+        before = [(row.payload_json, row.activity_id) for row in session.query(SessionFeedback).all()]
+        status = session.get(Workout, 1).status
+
+    def failed_evaluation(*args, **kwargs):
+        raise RuntimeError('Injected final evaluation failure')
+
+    monkeypatch.setattr(routes_coach, 'evaluate_workout', failed_evaluation)
+    with pytest.raises(RuntimeError, match='Injected final evaluation failure'):
+        client.post('/coach/workouts/1/evaluate', json={'rpe': 8, 'duration_min': 60})
+    with factory() as session:
+        assert [(row.payload_json, row.activity_id) for row in session.query(SessionFeedback).all()] == before
+        assert session.get(Workout, 1).status == status
+        assert session.query(WorkoutEvaluation).count() == int(existing_feedback)
+        assert session.query(AthleteAdaptation).count() == int(existing_feedback)
+
+
+def test_legacy_review_uses_the_athlete_day_after_local_midnight(legacy_api, monkeypatch):
+    from app.api import routes_coach
+
+    client, factory, today = legacy_api
+    now = datetime.combine(today - timedelta(days=1), datetime.min.time()) + timedelta(hours=23, minutes=30)
+
+    class FrozenUTC(datetime):
+        @classmethod
+        def utcnow(cls):
+            return now
+
+    monkeypatch.setattr(athlete_clock, 'utc_now_naive', lambda: now)
+    monkeypatch.setattr(routes_coach, 'datetime', FrozenUTC)
+    response = client.post('/coach/workouts/1/evaluate', json={'rpe': 4, 'duration_min': 60})
+    assert response.status_code == 200
+
+
+def test_explicit_legacy_match_checks_distance_in_local_calendar_days(legacy_api, monkeypatch):
+    client, factory, today = legacy_api
+    workout_day = today - timedelta(days=2)
+    with factory() as session:
+        session.get(Workout, 1).date = str(workout_day)
+        session.commit()
+    # UTC day appears three days away, while the Rome calendar day is two.
+    stamp = datetime.combine(today - timedelta(days=5), datetime.min.time()) + timedelta(hours=23, minutes=30)
+    activity_id = add_activity(factory, today, start_time=stamp)
+    response = client.post('/coach/workouts/1/match', json={'activity_id': activity_id})
+    assert response.status_code == 200
+    assert response.json()['auto_completed'] is False

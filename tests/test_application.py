@@ -77,3 +77,10 @@ def test_pain_pauses_new_daily_prescriptions(client):
     day = client.get('/coach/today').json()
     assert day['training_paused'] and day['workout']['duration_min'] == 0
     assert client.post('/coach/workouts', json={'sport': 'cycling'}).status_code == 409
+
+
+def test_real_app_returns_validation_errors_for_nonstandard_json_numbers(client):
+    response = client.put('/coach/daily-metrics', content='{"sleep_hours":NaN}',
+                          headers={'content-type': 'application/json'})
+    assert response.status_code == 422
+    assert 'input' not in response.json()['detail'][0]
