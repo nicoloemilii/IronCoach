@@ -18,7 +18,7 @@ def _activities(db: Session):
 
 @router.get("/analysis/fitness")
 def get_fitness_metrics(
-    ftp_watts: float = Query(170.0, gt=0),
+    ftp_watts: float = Query(170.0, gt=0, allow_inf_nan=False),
     db: Session = Depends(get_db),
 ):
     activities = _activities(db)
@@ -32,7 +32,7 @@ def get_fitness_metrics(
 
 @router.get("/analysis/fitness/sports")
 def get_fitness_by_sport(
-    ftp_watts: float = Query(170.0, gt=0),
+    ftp_watts: float = Query(170.0, gt=0, allow_inf_nan=False),
     db: Session = Depends(get_db),
 ):
     activities = _activities(db)
@@ -46,7 +46,7 @@ def get_fitness_by_sport(
 
 @router.get("/analysis/quality")
 def get_data_quality(
-    ftp_watts: float = Query(170.0, gt=0),
+    ftp_watts: float = Query(170.0, gt=0, allow_inf_nan=False),
     db: Session = Depends(get_db),
 ):
     return data_quality(_activities(db), ftp_watts)

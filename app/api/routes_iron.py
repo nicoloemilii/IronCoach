@@ -147,6 +147,12 @@ def activity_assessment(identifier: int, db: Session = Depends(get_db)):
 
 @router.get('/dashboard/home')
 def dashboard(day: Date | None = None, db: Session = Depends(get_db)):
+    from app.services.training_load import activity_load_snapshot
+    with activity_load_snapshot(db) as observations:
+        return _dashboard(day, db, observations)
+
+
+def _dashboard(day, db, observations):
     today = day or athlete_today()
     if today > athlete_today() or today < Date(1970, 1, 1):
         raise HTTPException(422, 'Scegli una data dal 1970 a oggi.')
@@ -154,12 +160,8 @@ def dashboard(day: Date | None = None, db: Session = Depends(get_db)):
     now = utc_now_naive()
     rows = [a for a in db.query(Activity).all()
             if as_utc_naive(a.start_time) <= now and activity_day(a.start_time) <= today]
-    def source_load(activity):
-        observation = db.query(ActivityObservation).filter(ActivityObservation.activity_id == activity.id, ActivityObservation.source_key.like('intervals:%')).first()
-        # An explicit missing remote load must not revive an older canonical value.
-        return json.loads(observation.payload_json).get('load') if observation else activity.load
-
-    loads = {a.id: source_load(a) for a in rows}
+    # A present null remains unavailable; it must not revive a canonical value.
+    loads = {a.id: observations.get(a.id, a.load) for a in rows}
     def summary(start, end):
         selected = [a for a in rows if start <= activity_day(a.start_time) <= end]
         def total(key, divisor=1):
@@ -259,6 +261,22 @@ def duplicates(db: Session = Depends(get_db)):
     return [{'id': r.id, 'activity': detail(db.get(Activity, r.activity_id)), 'other': detail(db.get(Activity, r.other_id))}
             for r in db.query(DuplicateCandidate).filter_by(status='pending').all()
             if db.get(Activity, r.activity_id) and db.get(Activity, r.other_id)]
+
+
+@router.get('/activities/duplicates/summary')
+def duplicates_summary(limit: int = Query(10000, ge=1, le=50000), db: Session = Depends(get_db)):
+    from app.db.repository import duplicate_summary
+    body, _ = duplicate_summary(db, limit)
+    return body
+
+
+@router.post('/activities/duplicates/scan', dependencies=[Depends(local_only)])
+def scan_duplicates(limit: int = Query(10000, ge=1, le=50000), db: Session = Depends(get_db)):
+    from app.db.repository import scan_exact_duplicates
+    try:
+        return scan_exact_duplicates(db, limit)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from None
 
 
 @router.post('/activities/duplicates/{identifier}/{decision}', dependencies=[Depends(local_only)])

@@ -1,9 +1,55 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from contextlib import contextmanager
+from contextvars import ContextVar
+import json
+import math
 from datetime import datetime, timedelta
 from typing import Iterable
 from app.services.athlete_clock import activity_day, athlete_today, as_utc_naive, utc_now_naive
+
+_LOAD_SNAPSHOT = ContextVar('activity_load_snapshot', default=None)
+
+
+def _observed_load(payload):
+    """Malformed legacy evidence stays unavailable, never a canonical fallback."""
+    try:
+        content = json.loads(payload)
+        value = content.get('load') if isinstance(content, dict) else None
+        if isinstance(value, bool) or value is None:
+            return None
+        number = float(value)
+        if not math.isfinite(number) or number < 0:
+            return None
+        return value if isinstance(value, (int, float)) else number
+    except (TypeError, ValueError, OverflowError, RecursionError):
+        return None
+
+
+@contextmanager
+def activity_load_snapshot(db):
+    """Batch observations for one read operation, scoped to its exact session.
+
+    Presence with a null load differs from no remote observation. A ContextVar
+    prevents sharing an athlete's data with concurrent requests or workspaces;
+    leaving the context always discards it, including after failures.
+    """
+    current = _LOAD_SNAPSHOT.get()
+    if current is not None and current[0] is db:
+        yield current[1]
+        return
+    from app.db.iron_models import ActivityObservation
+    values = {}
+    for identifier, payload in db.query(ActivityObservation.activity_id, ActivityObservation.payload_json).filter(
+            ActivityObservation.source_key.like('intervals:%')).order_by(ActivityObservation.id).all():
+        if identifier not in values:
+            values[identifier] = _observed_load(payload)
+    token = _LOAD_SNAPSHOT.set((db, values))
+    try:
+        yield values
+    finally:
+        _LOAD_SNAPSHOT.reset(token)
 
 
 CYCLING_SPORTS = {
@@ -50,13 +96,18 @@ def activity_load(activity, ftp_watts: float) -> float:
         from sqlalchemy.orm import object_session
         from sqlalchemy.orm.exc import UnmappedInstanceError
         from app.db.iron_models import ActivityObservation
-        import json
         try: db = object_session(activity)
         except UnmappedInstanceError: db = None
         if db:
-            observation = db.query(ActivityObservation).filter(ActivityObservation.activity_id == activity.id, ActivityObservation.source_key.like('intervals:%')).first()
-            if observation:
-                known = json.loads(observation.payload_json).get('load')
+            snapshot = _LOAD_SNAPSHOT.get()
+            if snapshot is not None and snapshot[0] is db:
+                observed = activity.id in snapshot[1]
+                known = snapshot[1].get(activity.id)
+            else:
+                observation = db.query(ActivityObservation).filter(ActivityObservation.activity_id == activity.id, ActivityObservation.source_key.like('intervals:%')).first()
+                observed = observation is not None
+                known = _observed_load(observation.payload_json) if observed else None
+            if observed:
                 if known is not None: return round(max(0, float(known)), 1)
                 remote_cleared = True
     if not remote_cleared and getattr(activity, 'source', None) == 'intervals' and getattr(activity, 'load', None) is not None:

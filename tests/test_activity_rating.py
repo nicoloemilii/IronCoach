@@ -112,6 +112,17 @@ def test_future_session_is_not_treated_as_completed(db):
     assert result['score'] is None and 'futura' in result['explanation']
 
 
+def test_distribution_preserves_exact_week_boundaries(db):
+    for days, load in [(28, 100), (21, 200), (14, 100), (7, 100)]:
+        activity(db, start_time=NOW-timedelta(days=days), load=load)
+    activity(db, start_time=NOW-timedelta(days=7)+timedelta(microseconds=1), load=50)
+    row = activity(db, start_time=NOW, load=50)
+    result = activity_ratings(db, now=NOW)[row.id]
+    distribution = next(item for item in result['components'] if item['key'] == 'distribution')
+    assert distribution['score'] == 30
+    assert distribution['reason'].startswith('200 punti, riferimento 100 (+100%)')
+
+
 def test_list_rating_uses_constant_queries_for_large_history(db, monkeypatch):
     monkeypatch.setattr('app.services.activity_rating.utc_now_naive', lambda: NOW)
     for index in range(1118):

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from statistics import mean, median
 
 from app.services.training_load import activity_load, sport_key
+from app.services.athlete_clock import activity_day, as_utc_naive
 
 
 IRONMAN_SPORTS = {
@@ -47,10 +48,10 @@ def _build_window(activities, ftp, label):
             "sports": {},
         }
 
-    activities = sorted(activities, key=lambda a: a.start_time)
+    activities = sorted(activities, key=lambda a: as_utc_naive(a.start_time))
 
-    first_date = activities[0].start_time.date()
-    last_date = activities[-1].start_time.date()
+    first_date = activity_day(activities[0].start_time)
+    last_date = activity_day(activities[-1].start_time)
     days = max((last_date - first_date).days + 1, 1)
     weeks = max(days / 7.0, 1.0)
 
@@ -76,9 +77,8 @@ def _build_window(activities, ftp, label):
     )
 
     for a in activities:
-        monday = a.start_time.date() - timedelta(
-            days=a.start_time.weekday()
-        )
+        local_day = activity_day(a.start_time)
+        monday = local_day - timedelta(days=local_day.weekday())
         key = monday.isoformat()
 
         weekly[key]["activities"] += 1
@@ -146,7 +146,7 @@ def _build_window(activities, ftp, label):
         },
         "activities": len(activities),
         "training_days": len(
-            set(a.start_time.date() for a in activities)
+            set(activity_day(a.start_time) for a in activities)
         ),
         "duration_hours": round(total_duration, 2),
         "distance_km": round(total_distance, 2),
@@ -183,7 +183,7 @@ def build_historical_profile(
     ]
 
     valid.sort(
-        key=lambda a: a.start_time
+        key=lambda a: as_utc_naive(a.start_time)
     )
 
     if not valid:
@@ -193,23 +193,24 @@ def build_historical_profile(
         }
 
     if reference_date is None:
-        reference_date = max(
-            a.start_time for a in valid
-        ).date()
+        reference_date = activity_day(valid[-1].start_time)
     elif isinstance(reference_date, datetime):
-        reference_date = reference_date.date()
+        reference_date = activity_day(reference_date)
 
-    cutoff_12m = reference_date - timedelta(days=365)
-    cutoff_90d = reference_date - timedelta(days=90)
+    valid = [a for a in valid if activity_day(a.start_time) <= reference_date]
+    if not valid:
+        return {'status': 'no_data', 'total_activities': 0, 'reference_date': reference_date.isoformat()}
+    cutoff_12m = reference_date - timedelta(days=364)
+    cutoff_90d = reference_date - timedelta(days=89)
 
     recent_12m = [
         a for a in valid
-        if a.start_time.date() >= cutoff_12m
+        if activity_day(a.start_time) >= cutoff_12m
     ]
 
     recent_90d = [
         a for a in valid
-        if a.start_time.date() >= cutoff_90d
+        if activity_day(a.start_time) >= cutoff_90d
     ]
 
     # Sport-specific Ironman history.

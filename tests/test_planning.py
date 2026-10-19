@@ -96,6 +96,24 @@ def test_all_exclusions_produce_empty_explained_week(db, monday):
     assert any("Nessuna nuova seduta" in reason for reason in week["rationale"])
 
 
+def test_cancelled_workouts_do_not_count_as_planned_or_consume_generation_budget(db, monday):
+    save(db)
+    cancelled = Workout(date=str(monday + timedelta(days=1)), sport='cycling',
+                        name='Cancelled manual session', duration_min=500, status='cancelled',
+                        payload_json=json.dumps({'source': 'manual', 'sport': 'cycling', 'steps': []}))
+    db.add(cancelled)
+    db.commit()
+    week = planning.get_week(db, monday)
+    assert week['total_minutes'] == 0
+    assert week['days'][1]['planned_minutes'] == 0
+    assert week['days'][1]['required_minutes'] == 0
+    assert not planning._occupancy(db, monday, [cancelled])
+    generated = planning.generate_week(db, monday)
+    assert generated['total_minutes'] > 0
+    assert generated['total_minutes'] <= generated['target_minutes']
+    assert db.get(Workout, cancelled.id).status == 'cancelled'
+
+
 def test_move_validates_capacity_and_shortening_has_reversible_structure(db, monday):
     save(db)
     first = planning.generate_week(db, monday)

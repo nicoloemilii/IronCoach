@@ -20,7 +20,7 @@ async function setup(t){
     const method=options.method||'GET';const payload=typeof options.body==='string'?JSON.parse(options.body):options.body;calls.push({url,method,payload});
     if(url.startsWith('/progress/week?'))return {start:'2026-10-12',end:'2026-10-18',counts:{unconfirmed:data.resolved?0:1},totals:{planned_minutes:60,confirmed_actual_minutes:null},adherence:{description:'Solo esecuzioni confermate.'},review:'Una seduta da rivedere.',suggestions:['Conferma i giorni passati.'],sessions:[{id:71,date:'2026-10-15',sport:'cycling',name:'Bici facile',planned_minutes:60,actual_minutes:null,status:data.resolved?'rest':'unconfirmed',can_resolve:!data.resolved,resolution:data.resolved?{status:'rest',reason:'Riposo scelto.'}:null}]};
     if(url==='/progress/workouts/71/resolution'){data.resolved=method==='PUT';return {status:data.resolved?'skipped':'planned'};}
-    if(url==='/progress/recovery?days=28'){if(data.failedRecovery)throw new Error('Test offline');return {summary:'Un confronto disponibile.',metrics:[{kind:'hrv_ms',label:'HRV',unit:'ms',current:null,baseline:null,recent_delta:null,status:'insufficient_data',stale:false,source:'intervals',points:[],explanation:'Servono più letture della stessa fonte.'}],subjective:[],limits:['Trend descrittivi.']};}
+    if(url==='/progress/recovery?days=28'){if(data.failedRecovery)throw new Error('Test offline');return {summary:'Un confronto disponibile.',metrics:data.recoveryMetrics||[{kind:'hrv_ms',label:'HRV',unit:'ms',current:null,baseline:null,recent_delta:null,status:'insufficient_data',stale:false,source:'intervals',points:[],explanation:'Servono più letture della stessa fonte.'}],subjective:[],limits:['Trend descrittivi.']};}
     if(url.startsWith('/planning/week?'))return {race_goal:{id:4,name:'Gara trail',date:'2027-06-01',legs:[{sport:'running',distance_km:21,elevation_gain_m:1000,terrain:'trail'}],constraints:['Il volume non aumenta automaticamente.']},goal_warnings:[]};
     if(url==='/planning/profile')return {profile:{},revision:8};
     if(url==='/planning/goal')return {profile:{race_goal_id:null},revision:9};
@@ -46,6 +46,17 @@ test('Coach omits the redundant unresolved-calendar review',async t=>{
 test('recovery keeps absent values and offers retry after an unavailable endpoint',async t=>{
   const {w,$,data,flush,navigate}=await setup(t);data.failedRecovery=true;navigate('health');await flush();assert.match($('#recovery-trends').textContent,/non è disponibile/);
   data.failedRecovery=false;$('#recovery-trends button').click();await flush();assert.match($('#recovery-trends').textContent,/— ms/);assert.doesNotMatch($('#recovery-trends').textContent,/0 ms/);
+  assert.match($('#recovery-trends').textContent,/Servono 3 letture recenti/);
+});
+
+test('recovery labels the three-reading median instead of presenting it as the latest measurement',async t=>{
+  const {$,data,flush,navigate}=await setup(t);
+  data.recoveryMetrics=[{kind:'resting_hr',label:'FC a riposo',unit:'bpm',current:53,baseline:52,recent_delta:1,status:'stable',stale:false,source:'intervals',counts:{recent:3,baseline:12},points:[{date:'2026-10-15',value:52},{date:'2026-10-16',value:53},{date:'2026-10-17',value:56}],explanation:'Confronto tra mediane della stessa fonte.'}];
+  navigate('health');await flush();
+  const card=$('#recovery-trends .trend-card');
+  assert.equal(card.querySelector('strong').textContent,'53 bpm');
+  assert.match(card.textContent,/Mediana delle ultime 3 letture · stessa fonte/);
+  assert.doesNotMatch(card.textContent,/Ultima lettura|56 bpm/);
 });
 
 test('active goal shows actual race characteristics and detaches through revision-checked API',async t=>{

@@ -23,6 +23,7 @@ from app.api.routes_health_reports import router as health_reports_router
 from app.api.routes_activity_detail import router as activity_detail_router
 from app.db.health_reports import ensure_health_reports_schema
 from app.api.routes_training import router as training_router
+from app.api.routes_training_insights import router as training_insights_router
 from app.db.training_models import ensure_training_schema
 from app.db.migrations import migrate
 from app.services import sync_jobs
@@ -66,6 +67,7 @@ app.include_router(backup_router)
 app.include_router(health_reports_router)
 app.include_router(activity_detail_router)
 app.include_router(training_router)
+app.include_router(training_insights_router)
 
 # A restore must not race a request that read an old workout/profile and then
 # writes after replacement. Read-only navigation remains concurrent.

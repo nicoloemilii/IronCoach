@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "description": "Synthetic DOM contract tests; no browser or backend access",
-  "scripts": { "test": "node --test --experimental-test-isolation=none app.test.cjs usability.test.cjs progress.test.cjs metric-status.test.cjs wellness.test.cjs manual-training.test.cjs activity-detail.test.cjs charts.test.cjs plan-coach.test.cjs account.test.cjs" },
+  "scripts": { "test": "node --test --experimental-test-isolation=none app.test.cjs usability.test.cjs progress.test.cjs metric-status.test.cjs wellness.test.cjs manual-training.test.cjs activity-detail.test.cjs charts.test.cjs plan-coach.test.cjs training-insights.test.cjs account.test.cjs" },
   "engines": { "node": ">=22.13.0" },
   "devDependencies": { "jsdom": "29.1.1" }
 }

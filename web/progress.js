@@ -77,6 +77,7 @@
         const card = el('article',null,'trend-card');
         card.classList.add('clickable-card');
         card.append(el('h3',metric.label),el('strong',`${number(metric.current,1)} ${metric.unit}`));
+        card.append(el('p',metric.counts?.recent >= 3 ? 'Mediana delle ultime 3 letture · stessa fonte' : 'Servono 3 letture recenti per il confronto','caption'));
         if(metric.points?.length)card.append(ui.sparkline(metric,true));
         if(colors)colors.apply(card,colors.trend(metric),false);
         const open=button('Analisi e andamento ↗',()=>ui.openHealthMetric({...metric,latest:metric.points?.at(-1),baseline:metric.baseline}),'metric-open');open.setAttribute('aria-label',`Apri ${metric.label}`);card.append(open);

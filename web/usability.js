@@ -20,12 +20,26 @@
     copy.append(name, detail); row.append(copy, link); return row;
   }
 
+  function focusVisibleContent() {
+    if (document.querySelector('dialog[open]')) return;
+    const conditionHeading = document.querySelector('#today .section-heading h2');
+    const target = conditionHeading && !conditionHeading.closest('[hidden]') ? conditionHeading : heading;
+    if (target) { target.tabIndex = -1; target.focus(); }
+  }
+
   function showNextSteps(snapshot) {
     if (!card || !steps || !snapshot || dismissed) return;
+    const focused = document.activeElement;
+    const focusWasInside = !card.closest('[hidden]') && card.contains(focused);
+    const focusedHref = focused?.closest('a')?.getAttribute('href');
     const ready = snapshot.hasProfile === true && snapshot.hasActivities === true;
     const missingProfile = snapshot.hasProfile === false;
     const missingActivities = snapshot.hasActivities === false;
-    if (ready || (!missingProfile && !missingActivities)) { card.hidden = true; return; }
+    if (ready || (!missingProfile && !missingActivities)) {
+      card.hidden = true;
+      if (focusWasInside) focusVisibleContent();
+      return;
+    }
     const signature = JSON.stringify([missingProfile, missingActivities, snapshot.intervalsConfigured === true, snapshot.hasGoals === false]);
     if (signature === renderedSetup) { card.hidden = false; return; }
     renderedSetup = signature;
@@ -38,24 +52,36 @@
     }
     if (optionalGoal) optionalGoal.hidden = snapshot.hasGoals !== false;
     card.hidden = false;
+    // A refresh can finish a step while its link is focused. Keep the cursor on
+    // its replacement, or on the next available action if that step is gone.
+    if (focusWasInside && (!focused.isConnected || focused.closest('[hidden]'))) {
+      const actions = [...steps.querySelectorAll('a')];
+      const next = actions.find(link => link.getAttribute('href') === focusedHref) || actions[0];
+      if (next && !document.querySelector('dialog[open]')) next.focus();
+      else focusVisibleContent();
+    }
   }
 
   if (dismiss) dismiss.addEventListener('click', () => {
     dismissed = true; card.hidden = true;
     try { sessionStorage.setItem(dismissalKey, '1'); } catch (_) { /* Dismissal still works for the current page. */ }
     // The control disappears, so keep keyboard users at a visible landmark.
-    const conditionHeading = document.querySelector('#today .section-heading h2');
-    if (conditionHeading) { conditionHeading.tabIndex = -1; conditionHeading.focus(); }
+    focusVisibleContent();
   });
 
   function syncNavigation(id, userInitiated) {
     const target = document.getElementById(id);
     if (!target?.classList.contains('page')) return;
+    let sectionName = target.getAttribute('aria-label');
     document.querySelectorAll('nav [data-page]').forEach(control => {
       control.setAttribute('aria-controls', control.dataset.page);
-      if (control.dataset.page === id) control.setAttribute('aria-current', 'page');
+      if (control.dataset.page === id) {
+        control.setAttribute('aria-current', 'page');
+        sectionName = control.querySelector('span')?.textContent.trim() || sectionName;
+      }
       else control.removeAttribute('aria-current');
     });
+    document.title = sectionName ? `${sectionName} · Iron Coach` : 'Iron Coach';
     // Loading data must never move the cursor out of an unfinished form.
     if (userInitiated === true && heading && !document.querySelector('dialog[open]')) heading.focus();
   }

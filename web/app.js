@@ -145,6 +145,7 @@ function page(id, userInitiated = false) {
   if (!Object.hasOwn(titles, id)) return;
   const previousPage=document.querySelector('.page:not([hidden])')?.id;
   const changed=previousPage!==id;
+  if (changed) document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
   if(id==='coach' && previousPage && previousPage!=='coach')coachReturnPage=previousPage;
   $('#coach-back').hidden=id!=='coach';
   document.querySelectorAll('.page').forEach(n => n.hidden = n.id !== id);
@@ -156,6 +157,7 @@ function page(id, userInitiated = false) {
 document.querySelectorAll('[data-page]').forEach(n => n.addEventListener('click', () => page(n.dataset.page, true)));
 $('#coach-back').addEventListener('click',()=>page(coachReturnPage,true));
 window.addEventListener('hashchange', () => page(location.hash.slice(1), true));
+$('.skip-link').addEventListener('click', event => { event.preventDefault(); $('#main-content').focus(); });
 function metric(label, value, caption) { const node = el('article', null, 'metric'); node.append(el('p', label), el('strong', value), el('small', caption)); return node; }
 function render() {
   const day = state.today;
@@ -164,6 +166,11 @@ function render() {
     $('#daily-goal').textContent = `${day.event.name || 'Imposta la tua prossima gara'}${remaining == null ? '' : remaining >= 0 ? ` · ${remaining} giorni al via` : ' · Gara conclusa'}`;
     $('#metrics').replaceChildren(metric('Fitness · CTL', number(day.fitness.ctl, 1), 'Carico cronico stimato'), metric('Fatica · ATL', number(day.fitness.atl, 1), 'Carico recente stimato'), metric('Bilancio · TSB', number(day.fitness.tsb, 1), 'Differenza tra fitness e fatica'), metric('Recupero', day.readiness.readiness == null ? 'N/D' : `${number(day.readiness.readiness)}/100`, `Confidenza: ${number(day.readiness.confidence)}% · ${day.date}`));
     $('#coach-reason').textContent = day.reason;
+    $('#daily-decision').textContent = day.training_paused
+      ? 'Oggi il recupero ha la priorità. Controlla i segnali prima di programmare un nuovo allenamento.'
+      : day.coach_context?.actions?.[0] || (day.readiness.readiness == null
+        ? 'Il recupero di oggi non è confermato. Valuta le sensazioni e mantieni lo sforzo controllato.'
+        : 'Segui il lavoro previsto e adatta la durata al tempo e alle sensazioni di oggi.');
     const scheduled = !day.training_paused && day.coach_context?.session_policy?.mode !== 'easy' && (day.scheduled_workouts || []).find(w => w.status === 'planned');
     const proposal = scheduled?.payload || day.workout;
     $('#coach-title').textContent = day.training_paused ? 'Oggi: recupero e rivalutazione' : `Oggi: ${sports[proposal.sport] || proposal.sport} · ${number(proposal.duration_min)} minuti`;
@@ -206,9 +213,11 @@ function markRetainedMetrics() {
     for (const card of document.querySelectorAll(selector)) colors.apply(card, {tone:'unknown',label:'Aggiornamento non riuscito',reason:'È mostrato l’ultimo valore caricato. Riprova l’aggiornamento prima di interpretarlo.'});
   }
 }
-function workoutCard(workout) {
+function workoutCard(workout, compact = false) {
   const row = button('', () => showWorkout(workout.payload, workout), 'list-row'); const detail = el('div');
-  detail.append(el('strong', `${sports[workout.sport] || workout.sport} · ${number(workout.duration_min)} min`), el('small', `${workout.date} · ${workout.payload.purpose || workout.name}`));
+  const purpose = String(workout.payload.purpose || workout.name || 'Allenamento');
+  const summary = compact ? (purpose.match(/^.*?[.!?](?:\s|$)/u)?.[0].trim() || purpose) : `${workout.date} · ${purpose}`;
+  detail.append(el('strong', `${sports[workout.sport] || workout.sport} · ${number(workout.duration_min)} min`), el('small', summary));
     row.append(detail, el('span', statuses[workout.status] || workout.status, 'badge')); return row;
 }
 function renderActivities() {
@@ -253,7 +262,7 @@ function renderWeek() {
     if (day.transition_minutes > 0) cell.append(el('small', `${number(day.transition_minutes)} min per la transizione`, 'muted'));
     const sessions = (day.sessions || []).filter(w => !['cancelled', 'superseded'].includes(w.status));
     if (!sessions.length) cell.append(el('p', day.recorded_minutes > 0 ? 'Nessuna seduta aggiuntiva' : 'Recupero / libero', 'rest-day'));
-    for (const workout of sessions) { const card = workoutCard(workout); card.classList.add('calendar-session', `sport-${workout.sport}`); cell.append(card); if(workout.payload.time_window)cell.append(el('small',workout.payload.time_window.label,workout.payload.time_window.conflict?'warning':'time-window')); if (workout.payload.brick) cell.append(el('small', `Combinato · fase ${workout.payload.brick.sequence}`, 'badge')); if (workout.status === 'planned') cell.append(button('Sposta / accorcia / salta', () => editSession(workout), 'text-button')); }
+    for (const workout of sessions) { const card = workoutCard(workout, true); card.classList.add('calendar-session', `sport-${workout.sport}`); cell.append(card); if(workout.payload.time_window)cell.append(el('small',workout.payload.time_window.label,workout.payload.time_window.conflict?'warning':'time-window')); if (workout.payload.brick) cell.append(el('small', `Combinato · fase ${workout.payload.brick.sequence}`, 'badge')); if (workout.status === 'planned') cell.append(button('Sposta / accorcia / salta', () => editSession(workout), 'text-button')); }
     $('#week-days').append(cell);
   }
   $('#plan-outlook').replaceChildren(el('h3', 'Orizzonte di preparazione'));
