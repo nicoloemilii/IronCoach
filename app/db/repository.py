@@ -160,7 +160,7 @@ def scan_exact_duplicates(db, limit=10000):
     return body
 
 
-def save_activity(db: Session, data: dict) -> Activity:
+def save_activity(db: Session, data: dict, *, commit: bool = True) -> Activity:
     identity_key = f"{data.get('source', 'unknown')}:{data['source_id']}"
     alias = db.query(ActivityIdentity).filter_by(source_key=identity_key).first()
     existing = db.get(Activity, alias.activity_id) if alias else (
@@ -209,7 +209,7 @@ def save_activity(db: Session, data: dict) -> Activity:
         if not observation:
             observation = ActivityObservation(source_key=identity_key, activity_id=existing.id); db.add(observation)
         observation.payload_json = json.dumps(data, default=str)
-        db.commit()
+        db.commit() if commit else db.flush()
         db.refresh(existing)
         return existing
 
@@ -230,7 +230,7 @@ def save_activity(db: Session, data: dict) -> Activity:
     db.add(ActivityObservation(source_key=identity_key, activity_id=activity.id, payload_json=json.dumps(data, default=str)))
     for candidate in possible_duplicates:
         db.add(DuplicateCandidate(activity_id=activity.id, other_id=candidate.id))
-    db.commit()
+    db.commit() if commit else db.flush()
     db.refresh(activity)
 
     return activity

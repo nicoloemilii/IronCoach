@@ -13,7 +13,7 @@ from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from app.api import routes_iron
+from app.api import routes_iron, routes_duplicate_review
 from app.db.database import Base, get_db
 from app.db.experience_models import ActivityIdentity, SessionFeedback
 from app.db.iron_models import (
@@ -28,6 +28,13 @@ from app.services import health, iron_coach, race_gap
 TODAY = date(2026, 10, 17)
 
 
+def _merge_with_preview(client, path):
+    preview = client.get(path.rsplit('/', 1)[0] + '/preview')
+    if preview.status_code != 200:
+        return preview
+    return client.post(path, json={'state_token': preview.json()['state_token']})
+
+
 @pytest.fixture
 def iron_api(monkeypatch):
     engine = create_engine('sqlite://', poolclass=StaticPool,
@@ -36,7 +43,7 @@ def iron_api(monkeypatch):
     for module in (routes_iron, iron_coach, race_gap):
         monkeypatch.setattr(module, 'athlete_today', lambda: TODAY)
     app = FastAPI()
-    app.include_router(routes_iron.router)
+    app.include_router(routes_duplicate_review.router); app.include_router(routes_iron.router)
 
     def isolated_db():
         with Session(engine) as db:
@@ -301,7 +308,7 @@ def test_similar_activities_are_candidates_until_explicit_merge(iron_api):
         db.commit(); keep_id = fit.id; remove_id = remote.id
     pending = client.get('/activities/duplicates/pending').json()
     assert len(pending) == 1
-    result = client.post(f"/activities/duplicates/{pending[0]['id']}/merge")
+    result = _merge_with_preview(client, f"/activities/duplicates/{pending[0]['id']}/merge")
     assert result.status_code == 200 and result.json()['activity_id'] == keep_id
     with Session(engine) as db:
         assert db.query(Activity).count() == 1 and db.get(Activity, remove_id) is None
@@ -323,12 +330,12 @@ def test_duplicate_keep_and_conflicting_feedback_do_not_destroy_data(iron_api):
         add_linked_workout(db, first, rpe=3)
         add_linked_workout(db, second, rpe=4)
     candidate = client.get('/activities/duplicates/pending').json()[0]['id']
-    assert client.post(f'/activities/duplicates/{candidate}/merge').status_code == 409
+    assert _merge_with_preview(client, f'/activities/duplicates/{candidate}/merge').status_code == 409
     with Session(engine) as db:
         assert db.query(Activity).count() == 2 and db.query(SessionFeedback).count() == 2
     assert client.post(f'/activities/duplicates/{candidate}/keep').json() == {'status': 'kept'}
     assert client.get('/activities/duplicates/pending').json() == []
-    assert client.post(f'/activities/duplicates/{candidate}/merge').status_code == 404
+    assert _merge_with_preview(client, f'/activities/duplicates/{candidate}/merge').status_code == 404
 
 
 def test_source_id_collision_keeps_separate_provider_identities(iron_api):
@@ -399,7 +406,7 @@ def test_migration_backups_original_and_is_idempotent():
     migrate(engine)
     assert len(list((folder / 'backups').glob('*.db'))) == 1
     with Session(engine) as db:
-        assert db.query(HealthMetric).count() == 2 and db.query(SchemaVersion).count() == 2
+        assert db.query(HealthMetric).count() == 2 and db.query(SchemaVersion).count() == 3
     engine.dispose()
     # Remove only the exact files this test created, without recursive deletion.
     path.unlink()

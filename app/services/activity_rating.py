@@ -8,41 +8,44 @@ import json
 import math
 from collections import defaultdict, deque
 from bisect import bisect_right
-from datetime import timedelta
+from datetime import date, datetime, timedelta
 from statistics import median
+from itertools import groupby
+from app.services.rating_history import HistoryContext
 from types import SimpleNamespace
+from sqlalchemy import and_, or_
 
-from app.db.iron_models import ActivityObservation, HealthMetric, RaceGoal
+from app.db.iron_models import HealthMetric, RaceGoal
 from app.db.models import Activity, DailyMetrics
 from app.db.planning_models import AthleteSettings
 from app.services.athlete_clock import activity_day, as_utc_naive, utc_now_naive
 from app.services.iron_coach import expected_benefit, grade
 from app.services.training_load import sport_key
+from app.services.health import usable_metric_value
+from app.services.observed_load import finite_load, load_values, resolve_observed_loads
 
 VERSION = 'recorded-session-1'
 
 
-def _number(value, positive=False):
-    if isinstance(value, bool):
-        return None
+def _day_before(day, days):
+    return date.fromordinal(max(1, day.toordinal() - days))
+
+
+def _stamp_before(stamp, days):
     try:
-        value = float(value)
-    except (TypeError, ValueError):
-        return None
-    return value if math.isfinite(value) and (value > 0 if positive else value >= 0) else None
+        return stamp - timedelta(days=days)
+    except OverflowError:
+        return datetime.min
+
+
+def _number(value, positive=False):
+    value = finite_load(value)
+    return value if value is not None and (not positive or value > 0) else None
 
 
 def recorded_loads(db, activities):
-    """Resolve the canonical Intervals load with one query, preserving nulls."""
-    result = {row.id: _number(row.load) for row in activities}
-    for identifier, payload in db.query(ActivityObservation.activity_id, ActivityObservation.payload_json).filter(
-            ActivityObservation.source_key.like('intervals:%')).all():
-        if identifier in result:
-            try:
-                result[identifier] = _number(json.loads(payload).get('load'))
-            except (ValueError, TypeError, AttributeError):
-                result[identifier] = None
-    return result
+    """Use the shared provider-identity policy, preserving missing/conflicting load."""
+    return load_values(resolve_observed_loads(db, activities))
 
 
 def _component(key, label, score, weight, reason):
@@ -63,6 +66,9 @@ def _dose(activity, load, history, loads):
     else:
         return _component('stimulus', 'Stimolo registrato', 65, 60,
                           'Seduta registrata. Mancano tre precedenti della stessa disciplina per valutarne la proporzione.'), False
+    if baseline <= 0 or not math.isfinite(baseline) or not math.isfinite(value):
+        return _component('stimulus', 'Stimolo registrato', 65, 60,
+                          'Il riferimento numerico non è utilizzabile per confrontare questa seduta.'), False
     ratio = value / baseline
     # A short recovery session is not automatically a bad session. Penalize
     # unusually large doses, never the absence of a maximal effort.
@@ -79,9 +85,9 @@ def _distribution(activity, load, history, loads):
     stamp = as_utc_naive(activity.start_time)
     # Two comparable preceding weeks and an established observation horizon
     # are required; absence of early history is not an empty training week.
-    if not history or as_utc_naive(history[0].start_time) > stamp - timedelta(days=21):
+    if stamp.toordinal() <= 21 or not history or as_utc_naive(history[0].start_time) > _stamp_before(stamp, 21):
         return None
-    boundaries = [stamp - timedelta(days=7*index) for index in range(4, -1, -1)]
+    boundaries = [_stamp_before(stamp, 7*index) for index in range(4, -1, -1)]
     groups = [[], [], [], []]
     for row in history:
         slot = bisect_right(boundaries, as_utc_naive(row.start_time)) - 1
@@ -97,10 +103,15 @@ def _distribution(activity, load, history, loads):
     reference = [total(rows) for rows in groups[1:]]
     reference = [value for value in reference if value is not None and value > 0]
     current_value = total(current)
-    if current_value is None or len(reference) < 2:
+    if (current_value is None or not math.isfinite(current_value) or len(reference) < 2
+            or any(not math.isfinite(value) for value in reference)):
         return None
     baseline = median(reference)
+    if not math.isfinite(baseline) or baseline <= 0:
+        return None
     ratio = current_value / baseline
+    if not math.isfinite(ratio):
+        return None
     score = 85 if ratio <= 1.15 else 75 if ratio <= 1.3 else 55 if ratio <= 1.5 else 30
     unit = 'punti' if use_load else 'minuti'
     label = 'Accumulo elevato: evita altro lavoro impegnativo.' if ratio > 1.3 else 'Distribuzione compatibile con il volume recente.'
@@ -112,7 +123,7 @@ def _recovery(activity, health):
     # Date-only wellness has no measurement time. Use only a preceding day,
     # never the same day or a measurement after the recorded session.
     day = activity_day(activity.start_time)
-    earliest = str(day - timedelta(days=2)); before = str(day)
+    earliest = str(_day_before(day, 2)); before = str(day)
     signals = []
     for kind in ('tsb', 'sleep_hours', 'hrv_ms', 'resting_hr_bpm'):
         candidates = [row for row in health.get(kind, []) if earliest <= row['date'] < before]
@@ -127,7 +138,7 @@ def _recovery(activity, health):
             score = 30 if value < 5 else 55 if value < 6 else 70 if value < 7 else 85
             signals.append((score, f'Sonno precedente {value:.1f} ore'))
         else:
-            baseline_rows = [row['value'] for row in health[kind] if str(day-timedelta(days=29)) <= row['date'] < latest['date']
+            baseline_rows = [row['value'] for row in health[kind] if str(_day_before(day, 29)) <= row['date'] < latest['date']
                              and row['source'] == latest['source']]
             if len(baseline_rows) < 7:
                 continue
@@ -144,37 +155,89 @@ def _recovery(activity, health):
                       '; '.join(reason for _, reason in signals) + '. Questi segnali orientano il giudizio, senza identificarne la causa.')
 
 
-def _health_index(db):
+def _merged_windows(windows):
+    result = []
+    for start, end in sorted((start, end) for start, end in windows if start <= end):
+        if result and start <= result[-1][1]:
+            result[-1] = (result[-1][0], max(result[-1][1], end))
+        else:
+            result.append((start, end))
+    return result
+
+
+def _within(column, windows):
+    return or_(*(and_(column >= start, column <= end) for start, end in windows))
+
+
+def _health_index(db, start=None, end=None, windows=None):
     result = defaultdict(list)
     kinds = ('tsb', 'sleep_hours', 'hrv_ms', 'resting_hr_bpm')
-    for row in db.query(HealthMetric).filter(HealthMetric.kind.in_(kinds)).all():
+    query = db.query(HealthMetric).filter(HealthMetric.kind.in_(kinds))
+    manual = db.query(DailyMetrics)
+    if start is not None:
+        query = query.filter(HealthMetric.date >= str(start)); manual = manual.filter(DailyMetrics.date >= str(start))
+    if end is not None:
+        query = query.filter(HealthMetric.date <= str(end)); manual = manual.filter(DailyMetrics.date <= str(end))
+    if windows is not None:
+        if not windows:
+            return result
+        text_windows = [(str(start), str(end)) for start, end in windows]
+        query = query.filter(_within(HealthMetric.date, text_windows))
+        manual = manual.filter(_within(DailyMetrics.date, text_windows))
+    saved = {}
+    for row in query.all():
         # TSB can be negative; validate it separately from nonnegative readings.
-        if row.value is not None and math.isfinite(row.value) and (row.kind == 'tsb' or row.value >= 0):
-            result[row.kind].append(dict(date=row.date, source=row.source, value=row.value))
-    for row in db.query(DailyMetrics).all():
+        value = usable_metric_value(row.kind, row.value)
+        try:
+            date.fromisoformat(row.date)
+        except (TypeError, ValueError):
+            continue
+        if (value is not None and isinstance(row.source, str) and row.source.strip()
+                and row.source.lower() not in ('local_estimate', 'estimated', 'estimate', 'unknown')
+                and (row.kind != 'sleep_hours' or value <= 24)):
+            saved[(row.date, row.kind, row.source)] = dict(date=row.date, source=row.source, value=value)
+    for row in manual.all():
+        try:
+            date.fromisoformat(row.date)
+        except (TypeError, ValueError):
+            continue
         for kind in kinds[1:]:
-            value = _number(getattr(row, kind, None))
-            if value is not None:
-                result[kind].append(dict(date=row.date, source='manual', value=value))
+            # A live manual row owns its fields, including a cleared value;
+            # migrated copies must not resurrect readings or count twice.
+            saved.pop((row.date, kind, 'manual'), None)
+            value = usable_metric_value(kind, getattr(row, kind, None))
+            if value is not None and (kind != 'sleep_hours' or value <= 24):
+                saved[(row.date, kind, 'manual')] = dict(date=row.date, source='manual', value=value)
+    for (_, kind, _), point in sorted(saved.items()):
+        result[kind].append(point)
     return result
 
 
 def _current_goal(db):
     settings = db.get(AthleteSettings, 1)
     try:
-        identifier = json.loads(settings.payload_json).get('race_goal_id') if settings else None
+        from app.services.execution_evidence import safe_object
+        content = safe_object(settings.payload_json) if settings else None
+        identifier = content.get('race_goal_id') if content else None
+        if isinstance(identifier, bool) or not isinstance(identifier, int) or identifier <= 0:
+            return None, []
         goal = db.get(RaceGoal, identifier) if identifier else None
-        return (goal, json.loads(goal.legs_json)) if goal else (None, [])
-    except (ValueError, TypeError, AttributeError):
+        legs = json.loads(goal.legs_json) if goal and len(goal.legs_json) <= 524288 else None
+        if not isinstance(legs, list) or len(legs) > 100 or any(not isinstance(leg, dict) or not isinstance(leg.get('sport'), str) for leg in legs):
+            return None, []
+        return goal, legs
+    except (ValueError, TypeError, AttributeError, OverflowError, RecursionError):
         return None, []
 
 
-def _rating(activity, load, history, loads, health, goal, legs, now):
+def _rating(activity, load, history, loads, health, goal, legs, now, history_context=None):
     base = dict(activity_id=activity.id, scope='recorded_session', score=None, judgment='Dati non utilizzabili',
                 tone='unknown', level=None, confidence_percent=0, components=[], evidence=[], actions=[],
                 limits=['Il voto descrive l’adeguatezza della seduta registrata: non misura la prestazione assoluta né gli adattamenti.'],
                 benefits=expected_benefit(activity.sport), rules_version=VERSION)
     duration = _number(activity.duration_seconds, positive=True)
+    if duration is not None and duration / 60 == 0:
+        duration = None
     if as_utc_naive(activity.start_time) > now:
         base['summary'] = base['explanation'] = 'La seduta è futura: il Coach valuta soltanto lavoro già registrato.'
         return base
@@ -182,12 +245,12 @@ def _rating(activity, load, history, loads, health, goal, legs, now):
         base['summary'] = base['explanation'] = 'Mancano una durata valida e un carico positivo. Non attribuisco un voto inventato.'
         return base
     components = []
-    dose, comparable = _dose(activity, load, history, loads)
+    dose, comparable = history_context.dose(activity) if history_context else _dose(activity, load, history, loads)
     components.append(dose)
-    distribution = _distribution(activity, load, history, loads)
+    distribution = history_context.distribution(activity) if history_context else _distribution(activity, load, history, loads)
     if distribution:
         components.append(distribution)
-    recovery = _recovery(activity, health)
+    recovery = history_context.recovery(activity) if history_context else _recovery(activity, health)
     if recovery:
         components.append(recovery)
     total_weight = sum(item['weight'] for item in components)
@@ -227,26 +290,43 @@ def _rating(activity, load, history, loads, health, goal, legs, now):
             'components': components, 'evidence': evidence, 'actions': [action]}
 
 
-def activity_ratings(db, activities=None, *, loads=None, now=None):
+def activity_ratings(db, activities=None, *, loads=None, now=None, target_ids=None):
     """Bounded chronological pass; no query is executed per activity."""
-    activities = activities if activities is not None else db.query(Activity).all()
-    loads = loads if loads is not None else recorded_loads(db, activities)
-    health = _health_index(db)
-    goal, legs = _current_goal(db)
     now = as_utc_naive(now or utc_now_naive())
+    target_ids = set(target_ids) if target_ids is not None else None
+    if activities is None and target_ids is not None:
+        targets = db.query(Activity).filter(Activity.id.in_(target_ids)).all() if target_ids else []
+        if not targets:
+            return {}
+        windows = _merged_windows((_stamp_before(as_utc_naive(row.start_time), 42),
+                                  min(as_utc_naive(row.start_time), now)) for row in targets)
+        prior = db.query(Activity).filter(_within(Activity.start_time, windows)).all() if windows else []
+        activities = list({row.id: row for row in prior + targets}.values())
+    else:
+        activities = list(activities) if activities is not None else db.query(Activity).all()
+    loads = loads if loads is not None else recorded_loads(db, activities)
+    observed_days = [activity_day(row.start_time) for row in activities if as_utc_naive(row.start_time) <= now
+                     and (target_ids is None or row.id in target_ids)]
+    health_windows = (_merged_windows((_day_before(day, 29), _day_before(day, 1)) for day in observed_days)
+                      if target_ids is not None else None)
+    health = _health_index(db, _day_before(min(observed_days), 29), _day_before(max(observed_days), 1),
+                           windows=health_windows) if observed_days else {}
+    goal, legs = _current_goal(db)
     # Rating repeatedly reads a bounded recent history. Plain immutable-by-use
     # snapshots avoid hundreds of thousands of SQLAlchemy attribute lookups;
     # they never mutate or detach the persisted Activity objects.
     activities = [SimpleNamespace(**{key: getattr(row, key) for key in
                   ('id', 'sport', 'start_time', 'duration_seconds', 'avg_hr', 'avg_power', 'normalized_power')})
                   for row in activities]
-    history = deque(); result = {}
-    for activity in sorted(activities, key=lambda row: (as_utc_naive(row.start_time), row.id)):
-        stamp = as_utc_naive(activity.start_time)
-        while history and as_utc_naive(history[0].start_time) < stamp - timedelta(days=42):
-            history.popleft()
-        prior = [row for row in history if as_utc_naive(row.start_time) < stamp]
-        result[activity.id] = _rating(activity, loads[activity.id], prior, loads, health, goal, legs, now)
-        if stamp <= now:
-            history.append(activity)
+    activities.sort(key=lambda row:(as_utc_naive(row.start_time),row.id))
+    context=HistoryContext(activities,loads,health,_component,_distribution,_recovery,_stamp_before)
+    result={}
+    # Equal timestamps are evaluated together before becoming prior context.
+    for stamp,group in groupby(activities,key=lambda row:as_utc_naive(row.start_time)):
+        group=list(group);context.advance(stamp)
+        for activity in group:
+            if target_ids is None or activity.id in target_ids:
+                result[activity.id]=_rating(activity,loads[activity.id],None,loads,health,goal,legs,now,history_context=context)
+        if stamp<=now:
+            for activity in group:context.add(activity)
     return result

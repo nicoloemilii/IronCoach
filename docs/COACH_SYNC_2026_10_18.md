@@ -1,10 +1,5 @@
 # Coach, sincronizzazione e disponibilità wellness — 18 ottobre 2026
 
-## Riscontro sui dati reali
-
-Ispezione in sola lettura di 31 giorni wellness e 22 attività tramite la connessione esistente, senza stampare chiavi, nomi o risposte integrali. Nessun valore di Body Battery o stress era presente, neppure nei campi personalizzati annidati. `ctlLoad` e `atlLoad` erano presenti in tutti i giorni esaminati. Il dislivello era disponibile per 9 attività su 22.
-
-La sincronizzazione reale successiva è terminata con `success`: 36 giorni wellness importati, zero nuove attività, zero errori. La risposta locale mostra 28 osservazioni visibili per ciascun nuovo campo di carico giornaliero. Body Battery e stress rimangono senza osservazioni, coerentemente con la risposta remota.
 
 ## Modifiche
 
@@ -26,4 +21,3 @@ Configurazione ufficiale Body Battery: [istruzioni del manutentore Intervals.icu
 
 374 test backend e 72 test frontend superati. Inclusi: soglie ai limiti, dati nulli/zeri, assenza di storico, stime locali, backup e API complete, importazioni dei nuovi campi, sincronizzazione di entrambi i provider, riuso dei job, protezione dell'origine e dei segreti, esiti parziali, dettagli senza fonti e confronti settimanali.
 
-Server aggiornato e lasciato attivo su `127.0.0.1:8000`. La verifica reale API conferma un giudizio sul carico, quattro periodi precedenti, 492 m di dislivello noto con cinque attività prive della misura e i nuovi campi quotidiani. Il controllo resta distinto da un collaudo visivo nel browser.

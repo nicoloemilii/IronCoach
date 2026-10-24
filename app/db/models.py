@@ -1,12 +1,13 @@
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Float, Integer, String
+from sqlalchemy import Column, DateTime, Float, Integer, String, Index
 
 from app.db.database import Base
 
 
 class Activity(Base):
     __tablename__ = "activities"
+    __table_args__ = (Index('ix_activities_start_id', 'start_time', 'id'),)
 
     id = Column(Integer, primary_key=True, index=True)
 

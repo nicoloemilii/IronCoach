@@ -5,20 +5,18 @@ The athlete's own explanation is preserved separately from observed comparisons.
 """
 from __future__ import annotations
 
-import json
 import math
 from datetime import date as Date, datetime, timedelta
-from statistics import median
 from typing import Literal
 
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.db.health_reports import HealthReport
-from app.db.iron_models import ActivityObservation
 from app.db.models import Activity
 from app.services.athlete_clock import activity_day, athlete_today, day_start_utc, utc_now_naive
-from app.services.health import series
+from app.services.health import series, usable_metric_value
+from app.services.observed_load import resolve_observed_loads
 
 KINDS = {'injury': 'Infortunio', 'contracture': 'Contrattura', 'illness': 'Malessere / malattia', 'cold': 'Raffreddore'}
 
@@ -103,21 +101,20 @@ def active_restrictions(db, day=None):
             'reports': [serialize(row) for row in active]}
 
 
-def _known_loads(db, activities):
-    identifiers = [row.id for row in activities]
-    observed = {}
-    if identifiers:
-        for row in db.query(ActivityObservation).filter(ActivityObservation.activity_id.in_(identifiers), ActivityObservation.source_key.like('intervals:%')).all():
-            try:
-                observed[row.activity_id] = json.loads(row.payload_json).get('load')
-            except (ValueError, TypeError):
-                observed[row.activity_id] = None
-    values = []
-    for row in activities:
-        load = observed.get(row.id, row.load)
-        if isinstance(load, (int, float)) and not isinstance(load, bool) and math.isfinite(load) and load >= 0:
-            values.append((activity_day(row.start_time), float(load)))
-    return values
+def _known_loads(db, activities, *, resolved=None):
+    resolved = resolve_observed_loads(db, activities) if resolved is None else resolved
+    return [(activity_day(row.start_time), resolved[row.id]['value']) for row in activities
+            if resolved[row.id]['value'] is not None]
+
+
+def _finite_median(values):
+    values = sorted(values); middle = len(values) // 2
+    return values[middle] if len(values) % 2 else values[middle - 1] / 2 + values[middle] / 2
+
+
+def _finite_change(new, old):
+    result = (new / old - 1) * 100 if old else None
+    return result if result is not None and math.isfinite(result) else None
 
 
 def report_analysis(db, report):
@@ -125,31 +122,45 @@ def report_analysis(db, report):
     recent_start = onset - timedelta(days=3)
     baseline_start = recent_start - timedelta(days=28)
     points = series(db, baseline_start, onset - timedelta(days=1))
+    points = [point for point in points if point['source'].lower() not in ('local_estimate', 'estimated', 'estimate', 'unknown')]
     comparisons = []
     labels = {'sleep_hours': ('Sonno', 'ore'), 'hrv_ms': ('HRV', 'ms'), 'resting_hr_bpm': ('FC a riposo', 'bpm')}
     for kind, (label, unit) in labels.items():
-        recent = [point for point in points if point['kind'] == kind and str(recent_start) <= point['date'] < str(onset)]
+        recent = [point for point in points if point['kind'] == kind and str(recent_start) <= point['date'] < str(onset)
+                  and usable_metric_value(kind, point['value']) is not None]
         if not recent:
             continue
         chosen_source = recent[-1]['source']
         recent_values = [point['value'] for point in recent if point['source'] == chosen_source]
-        baseline = [point['value'] for point in points if point['kind'] == kind and point['source'] == chosen_source and point['date'] < str(recent_start)]
+        baseline = [point['value'] for point in points if point['kind'] == kind and point['source'] == chosen_source and point['date'] < str(recent_start)
+                    and usable_metric_value(kind, point['value']) is not None]
         if len(recent_values) < 2 or len(baseline) < 7:
             continue
-        old, new = median(baseline), median(recent_values)
-        percent = (new / old - 1) * 100 if old else None
+        old, new = _finite_median(baseline), _finite_median(recent_values)
+        percent = _finite_change(new, old)
         noteworthy = (kind == 'sleep_hours' and new < old * .9) or (kind == 'hrv_ms' and new < old * .85) or (kind == 'resting_hr_bpm' and new >= old + 4)
         comparisons.append({'kind': kind, 'label': label, 'unit': unit, 'recent_value': round(new, 1), 'baseline_value': round(old, 1),
                             'change_percent': round(percent, 1) if percent is not None else None, 'noteworthy': noteworthy,
                             'observation': f'{label}: {new:.1f} {unit} prima dei sintomi, rispetto a {old:.1f} {unit} nel periodo precedente.'})
     activities = db.query(Activity).filter(Activity.start_time >= day_start_utc(baseline_start), Activity.start_time < day_start_utc(onset), Activity.start_time <= utc_now_naive()).all()
-    loads = _known_loads(db, activities)
+    resolved = resolve_observed_loads(db, activities)
+    loads = _known_loads(db, activities, resolved=resolved)
+    load_coverage = {status: sum(item['status'] == status for item in resolved.values())
+                     for status in ('available', 'missing', 'invalid', 'conflict')}
+    load_coverage.update(activities=len(activities), complete=len(loads) == len(activities), scope='recorded_activities_only')
     recent = [value for day, value in loads if recent_start <= day < onset]
     baseline = [value for day, value in loads if baseline_start <= day < recent_start]
-    if recent and len(baseline) >= 3:
-        old = sum(baseline) / 28
-        new = sum(recent) / 3
-        change = (new / old - 1) * 100 if old else None
+    if recent and len(baseline) >= 3 and load_coverage['complete']:
+        # Scale before summing to avoid an intermediate overflow from otherwise
+        # finite data. An unrepresentable aggregate remains unavailable.
+        old = sum(value / 28 for value in baseline)
+        new = sum(value / 3 for value in recent)
+        change = _finite_change(new, old) if math.isfinite(new) and math.isfinite(old) else None
+        if not math.isfinite(old) or not math.isfinite(new):
+            old = new = None
+    else:
+        old = new = change = None
+    if old is not None and new is not None:
         comparisons.append({'kind': 'load', 'label': 'Carico registrato al giorno', 'unit': 'punti/giorno',
                             'recent_value': round(new, 1), 'baseline_value': round(old, 1), 'change_percent': round(change, 1) if change is not None else None,
                             'noteworthy': bool(old > 0 and new > old * 1.25),
@@ -164,4 +175,5 @@ def report_analysis(db, report):
     return {'summary': summary, 'associations': associations, 'comparisons': comparisons,
             'athlete_hypothesis': report.suspected_cause, 'hypothesis_label': 'La tua ipotesi, non una causa confermata',
             'recent_start': str(recent_start), 'recent_end': str(onset - timedelta(days=1)), 'baseline_start': str(baseline_start),
-            'restriction': active_restrictions(db, onset), 'method': 'preceding-3d-vs-prior-28d-1'}
+            'restriction': active_restrictions(db, onset), 'load_coverage': load_coverage,
+            'method': 'preceding-3d-vs-prior-28d-1'}

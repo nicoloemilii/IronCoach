@@ -66,7 +66,8 @@ def _feedback(**overrides):
 
 def _activity(factory, today, **overrides):
     data = {"source": "garmin", "source_id": "actual-1", "sport": "cycling", "name": "Registrata",
-            "start_time": datetime.combine(today, datetime.min.time()) + timedelta(hours=8),
+            "start_time": min(datetime.combine(today, datetime.min.time()) + timedelta(hours=8),
+                              datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=1)),
             "duration_seconds": 1800, "distance_meters": 15000, "avg_power": 140}
     data.update(overrides)
     with factory() as session:

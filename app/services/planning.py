@@ -25,7 +25,8 @@ from app.db.experience_models import AthleteCheckin, SessionFeedback
 from app.db.garmin_models import GarminDelivery
 from app.db.planning_models import AthleteSettings, PlanRevision
 from app.services.athlete_profile import load_profile
-from app.services.athlete_clock import athlete_today, activity_day, day_start_utc
+from app.services.athlete_clock import athlete_today, activity_day, day_start_utc, utc_now_naive
+from app.services.execution_evidence import finite_number, safe_object, usable_feedback
 from app.services.training_load import sport_key
 from app.services.health import series
 from app.services.goal_planning import goal_context, allocation_for_goal, focus_for_sport
@@ -204,12 +205,13 @@ def _published(db: Session, workout_id: int) -> bool:
 
 
 def _recorded_minutes(db: Session, start: date) -> Counter:
-    """Count real work already done this week, even if it had no planned session."""
-    rows = db.query(Activity).filter(Activity.start_time >= day_start_utc(start), Activity.start_time < day_start_utc(start + timedelta(days=7)), Activity.start_time <= datetime.utcnow()).all()
+    """Sum known finite work this week; absent durations cannot increase capacity."""
+    rows = db.query(Activity).filter(Activity.start_time >= day_start_utc(start), Activity.start_time < day_start_utc(start + timedelta(days=7)), Activity.start_time <= utc_now_naive()).all()
     result = Counter()
     for row in rows:
-        if (row.duration_seconds or 0) >= 300 and sport_key(row.sport) in ("bike", "run", "swim", "strength"):
-            result[activity_day(row.start_time).isoformat()] += row.duration_seconds / 60
+        seconds = finite_number(row.duration_seconds, minimum=0)
+        if seconds is not None and seconds >= 300 and sport_key(row.sport) in ("bike", "run", "swim", "strength"):
+            result[activity_day(row.start_time).isoformat()] += seconds / 60
     return result
 
 
@@ -231,8 +233,17 @@ def _occupancy(db: Session, start: date, rows: list[Workout]) -> Counter:
     return Counter({day: pending[day] + max(completed[day], recorded[day]) + transition_minutes[day] for day in set(pending) | set(completed) | set(recorded)})
 
 
-def serialize_workout(row: Workout) -> dict:
-    return {"id": row.id, "date": row.date, "sport": row.sport, "name": row.name, "duration_min": row.duration_min, "status": row.status, "payload": json.loads(row.payload_json)}
+def serialize_workout(row: Workout, *, diagnostic: bool = False) -> dict:
+    payload = safe_object(row.payload_json)
+    if payload is None and not diagnostic:
+        raise HTTPException(409, 'Il programma contiene dati non leggibili: verifica la seduta prima di modificarlo.')
+    result = {"id": row.id, "date": row.date, "sport": row.sport, "name": row.name,
+              "duration_min": row.duration_min, "status": row.status,
+              "payload": payload if payload is not None else {
+                  'sport': row.sport, 'name': row.name, 'duration_min': row.duration_min, 'steps': []}}
+    if diagnostic and payload is None:
+        result['payload_issue'] = 'Il programma salvato non è leggibile: i dettagli mostrano soltanto i dati di base. Verifica la seduta prima di modificarla.'
+    return result
 
 
 def _snapshot(rows):
@@ -310,20 +321,39 @@ def _allocation(profile: dict) -> dict:
 
 def _feedback_signals(db: Session, start: date) -> dict:
     today = _today()
+    now = utc_now_naive()
     cutoff = (today - timedelta(days=14)).isoformat()
     # Session date, rather than edit time, prevents an edited old report becoming a new signal.
-    rows = db.query(SessionFeedback, Workout).join(Workout, SessionFeedback.workout_id == Workout.id).filter(Workout.date >= cutoff, Workout.date <= today.isoformat()).all()
+    # Load canonical activities with the feedback in one query. Stored completion
+    # percentages cannot replace the duration actually available from that source.
+    rows = (db.query(SessionFeedback, Workout, Activity)
+            .join(Workout, SessionFeedback.workout_id == Workout.id)
+            .outerjoin(Activity, SessionFeedback.activity_id == Activity.id)
+            .filter(Workout.date >= cutoff, Workout.date <= today.isoformat(),
+                    ~Workout.status.in_(['cancelled', 'superseded', 'skipped']))
+            .all())
     signals = {sport: {"samples": 0, "concerning": 0, "factor": 1.0, "workout_ids": []} for sport in SPORTS}
     seen = set()
-    for feedback, workout in rows:
-        if workout.id in seen or workout.sport not in signals:
+    canonical = {'bike': 'cycling', 'run': 'running', 'swim': 'swimming', 'strength': 'strength'}
+    for feedback, workout, activity in rows:
+        sport = canonical.get(sport_key(workout.sport))
+        if workout.id in seen or sport not in signals:
             continue
         seen.add(workout.id)
-        content = json.loads(feedback.payload_json)
-        signal = signals[workout.sport]
+        evidence = usable_feedback(workout, feedback, activity, today=today, now=now)
+        if not evidence['usable']:
+            continue
+        content = evidence['content']
+        if ('evaluation' in content and not isinstance(content['evaluation'], dict)
+                or content.get('feeling') not in (None, 'easier', 'as_expected', 'harder')):
+            continue
+        signal = signals[sport]
         signal["samples"] += 1
-        completion = content.get("evaluation", {}).get("completion", content.get("completion_percent", 100))
-        concerning = content.get("feeling") == "harder" or float(content.get("rpe") or 0) >= 8 or (completion is not None and float(completion) < 70)
+        completion = (evidence['minutes'] / workout.duration_min * 100
+                      if evidence['minutes'] is not None else None)
+        rpe = finite_number(content.get('rpe'), minimum=1, maximum=10)
+        concerning = (content.get('feeling') == 'harder' or rpe is not None and rpe >= 8
+                      or completion is not None and completion < 70)
         if concerning:
             signal["concerning"] += 1
             signal["workout_ids"].append(workout.id)
@@ -341,9 +371,13 @@ def _capacity(db: Session, profile: dict, start: date) -> dict:
     since = day_start_utc(anchor - timedelta(days=28))
     until = day_start_utc(anchor)
     rows = db.query(Activity).filter(Activity.start_time >= since, Activity.start_time < until).all()
-    valid = [a for a in rows if (a.duration_seconds or 0) >= 300 and sport_key(a.sport) in ("bike", "run", "swim", "strength")]
+    valid = [a for a in rows if finite_number(a.duration_seconds, minimum=300) is not None
+             and sport_key(a.sport) in ("bike", "run", "swim", "strength")]
     observed_minutes = sum(a.duration_seconds / 60 for a in valid) / 4
     reasons = []
+    unknown_duration = sum(finite_number(a.duration_seconds, minimum=0) is None for a in rows)
+    if unknown_duration:
+        reasons.append(f"{unknown_duration} attività con durata assente o non valida non partecipano alla stima di capacità.")
     if len(valid) >= 6:
         # Fixed 28-day denominator avoids inflating capacity from a few active days.
         limit = int(observed_minutes * 1.05)
@@ -525,6 +559,47 @@ def _preview(profile, start, target):
     return preview
 
 
+def _week_execution(db: Session, workouts: list[Workout]) -> dict:
+    """Describe current evidence without rewriting the protected plan ledger."""
+    identifiers = [row.id for row in workouts]
+    linked = (db.query(SessionFeedback, Activity)
+              .outerjoin(Activity, SessionFeedback.activity_id == Activity.id)
+              .filter(SessionFeedback.workout_id.in_(identifiers)).all())
+    feedbacks = {feedback.workout_id: (feedback, activity) for feedback, activity in linked}
+    resolutions = {row.workout_id: row for row in db.query(WorkoutResolution).filter(
+        WorkoutResolution.workout_id.in_(identifiers), WorkoutResolution.undone_at.is_(None))}
+    today, now = _today(), utc_now_naive()
+    result = {}
+    for workout in workouts:
+        feedback, activity = feedbacks.get(workout.id, (None, None))
+        evidence = usable_feedback(workout, feedback, activity, today=today, now=now)
+        status, source, minutes, completion = 'planned', None, None, None
+        if workout.status in ('cancelled', 'superseded'):
+            status = workout.status
+        elif evidence['usable']:
+            source, minutes = evidence['source'], evidence['minutes']
+            completion = (finite_number(minutes / workout.duration_min * 100, minimum=0)
+                          if minutes is not None else None)
+            modified = ((completion is not None and abs(completion - 100) > .01)
+                        or evidence['content'].get('feeling') in ('harder', 'easier'))
+            status = 'modified' if modified else 'completed'
+        elif workout.id in resolutions and workout.date < str(today):
+            resolution = resolutions[workout.id]
+            status = resolution.kind if resolution.kind in ('skipped', 'rest') else 'unconfirmed'
+            source = 'explicit_resolution' if status != 'unconfirmed' else None
+        elif workout.status == 'skipped':
+            status, source = 'skipped', 'planned_skip'
+        elif workout.date < str(today):
+            status = 'unconfirmed'
+        result[workout.id] = {
+            'execution_status': status, 'execution_source': source,
+            'confirmed_actual_minutes': round(minutes, 1) if minutes is not None else None,
+            'completion_percent': round(completion, 1) if completion is not None else None,
+            'evidence_issue': evidence['issue'] if feedback and not evidence['usable'] else None,
+        }
+    return result
+
+
 def get_week(db: Session, value=None) -> dict:
     start = week_start(value)
     profile, race_goal, goal_warnings = goal_context(db, load_settings(db))
@@ -533,12 +608,18 @@ def get_week(db: Session, value=None) -> dict:
     metadata = json.loads(revision.metadata_json) if revision else {}
     capacity = _capacity(db, profile, start)
     recorded = _recorded_minutes(db, start)
+    execution = _week_execution(db, rows)
     days = []
-    summary = {sport: {"sessions": 0, "minutes": 0, "completed_minutes": 0} for sport in SPORTS}
+    def empty_summary():
+        return {"sessions": 0, "minutes": 0, "completed_minutes": 0,
+                "completed_planned_minutes": 0, "confirmed_sessions": 0,
+                "unknown_duration_sessions": 0, "unconfirmed_sessions": 0}
+    summary = {sport: empty_summary() for sport in SPORTS}
     for index in range(7):
         day = (start + timedelta(days=index)).isoformat()
-        sessions = [serialize_workout(row) for row in rows if row.date == day]
+        sessions = [serialize_workout(row, diagnostic=True) for row in rows if row.date == day]
         for session in sessions:
+            session.update(execution[session['id']])
             if session['status'] == 'planned' and day >= _today().isoformat():
                 window = windows(profile, day, session['sport'])
                 if window['restricted']:
@@ -546,11 +627,19 @@ def get_week(db: Session, value=None) -> dict:
         sessions.sort(key=lambda row: (row["payload"].get("brick", {}).get("group_id", ""), row["payload"].get("brick", {}).get("sequence", 0), row["id"]))
         active = [row for row in sessions if row["status"] not in ("skipped", "superseded", "cancelled")]
         for row in active:
-            bucket = summary.setdefault(row["sport"], {"sessions": 0, "minutes": 0, "completed_minutes": 0})
+            bucket = summary.setdefault(row["sport"], empty_summary())
             bucket["sessions"] += 1
             bucket["minutes"] += row["duration_min"]
-            if row["status"] == "completed":
-                bucket["completed_minutes"] += row["duration_min"]
+            if row['execution_status'] == 'unconfirmed':
+                bucket['unconfirmed_sessions'] += 1
+            if row['execution_source'] in ('activity', 'self_reported'):
+                bucket['confirmed_sessions'] += 1
+                bucket['completed_planned_minutes'] += row['duration_min']
+                if row['confirmed_actual_minutes'] is None:
+                    bucket['unknown_duration_sessions'] += 1
+                    bucket['completed_minutes'] = None
+                elif bucket['completed_minutes'] is not None:
+                    bucket['completed_minutes'] += row['confirmed_actual_minutes']
         planned = sum(r["duration_min"] for r in active)
         transition = 5 * len({r["payload"]["brick"]["group_id"] for r in active if r["payload"].get("brick", {}).get("sequence") == 1})
         completed = sum(r["duration_min"] for r in active if r["status"] == "completed")

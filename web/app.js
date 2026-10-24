@@ -1,6 +1,7 @@
 'use strict';
 let homeDay = null;
 let coachReturnPage='today';
+let activityDiary=null,diaryLoadCount=0;
 const $ = selector => document.querySelector(selector);
 const state = { today: null, home: null, health: null, healthRange: '', coach: null, goals: [], strava: null, profile: null, settings: null, settingsRevision: null, week: null, weekStart: monday(), workouts: [], activities: [], activityLimit: 50, busy: false, selected: null, garmin: null, failedReads: new Set() };
 const sports = { cycling: 'Bici', running: 'Corsa', swimming: 'Nuoto', bike: 'Bici', run: 'Corsa', swim: 'Nuoto', strength: 'Forza' };
@@ -36,6 +37,7 @@ function notice(message, error = false) {
 }
 async function api(path, options = {}) {
   const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 30000);
+  const cancel=()=>controller.abort();if(options.signal?.aborted)cancel();else options.signal?.addEventListener('abort',cancel,{once:true});
   try {
     const response = await fetch(path, { ...options, signal: controller.signal, headers: { 'Content-Type': 'application/json', ...options.headers } });
     const data = await response.json().catch(() => ({}));
@@ -45,7 +47,7 @@ async function api(path, options = {}) {
     }
     if (data.error) throw new Error(String(data.error));
     return data;
-  } finally { clearTimeout(timeout); }
+  } finally { clearTimeout(timeout); options.signal?.removeEventListener('abort',cancel); }
 }
 const json = (method, payload) => ({ method, body: JSON.stringify(payload) });
 async function saveProfile(payload, revision) {
@@ -81,18 +83,21 @@ async function action(work) {
     $('#today-save').disabled = !state.today || state.today.training_paused;
     document.querySelectorAll('[data-sport]').forEach(node => node.disabled = !state.today || state.today.training_paused || (Array.isArray(state.today.allowed_sports) && !state.today.allowed_sports.includes(node.dataset.sport)));
     $('#send-garmin').disabled = !state.selected?.id;
+    updateFeedbackAvailability();
     $('#undo-week').disabled = !state.week?.can_undo;
     updateIntervalsControls();
     updateStravaControls();
     $('#home-next').disabled = (state.home?.date || athleteDate()) >= athleteDate();
     $('#home-prev').disabled = (state.home?.date || athleteDate()) <= '1970-01-01';
+    activityDiary?.render();
   }
 }
 async function loadWeek() { state.week = await api(`/planning/week?start=${state.weekStart}`); renderWeek(); document.dispatchEvent(new CustomEvent('iron:weekchange')); }
 async function load() {
+  if(activityDiary)activityDiary.refresh({coalesce:diaryLoadCount++===0});
   const tasks = [
     ['/coach/today', value => state.today = value], ['/athlete/profile', value => state.profile = value],
-    ['/coach/workouts?limit=200', value => state.workouts = value], ['/activities', value => state.activities = value],
+    ['/coach/workouts?limit=200', value => state.workouts = value], ...(!activityDiary?[['/activities', value => state.activities = value]]:[]),
     ['/planning/profile', value => { state.settings = value.profile; state.settingsRevision = value.revision; }],
     [`/planning/week?start=${state.weekStart}`, value => state.week = value],
     ['/integrations/garmin/status', value => state.garmin = value],
@@ -123,7 +128,7 @@ async function load() {
   const previous = window.ironViewSnapshot || {};
   const hasGoals = Boolean(state.goals.length || (state.settings?.event_name && state.settings?.event_date));
   window.ironViewSnapshot = { hasProfile: loaded('/planning/profile') ? state.settingsRevision > 0 : previous.hasProfile,
-    hasActivities: loaded('/activities') ? state.activities.length > 0 : previous.hasActivities,
+    hasActivities: activityDiary?(state.activityArchiveTotal==null?previous.hasActivities:state.activityArchiveTotal>0):loaded('/activities') ? state.activities.length > 0 : previous.hasActivities,
     intervalsConfigured: loaded('/integrations/intervals/status') ? Boolean(intervalsConnection?.configured) : previous.intervalsConfigured,
     hasGoals: hasGoals || (loaded('/goals') && loaded('/planning/profile') ? false : previous.hasGoals) };
   document.dispatchEvent(new CustomEvent('iron:loaded', { detail: window.ironViewSnapshot }));
@@ -218,26 +223,40 @@ function workoutCard(workout, compact = false) {
   const purpose = String(workout.payload.purpose || workout.name || 'Allenamento');
   const summary = compact ? (purpose.match(/^.*?[.!?](?:\s|$)/u)?.[0].trim() || purpose) : `${workout.date} · ${purpose}`;
   detail.append(el('strong', `${sports[workout.sport] || workout.sport} · ${number(workout.duration_min)} min`), el('small', summary));
-    row.append(detail, el('span', statuses[workout.status] || workout.status, 'badge')); return row;
+  const execution = {unconfirmed:'Da confermare',modified:'Esecuzione modificata',completed:'Esecuzione confermata',rest:'Riposo confermato'};
+  const displayStatus = workout.execution_status;
+  row.append(detail, el('span', displayStatus ? execution[displayStatus] || statuses[displayStatus] || displayStatus : statuses[workout.status] || workout.status, 'badge'));
+  if (workout.evidence_issue) detail.append(el('small',workout.evidence_issue,'caption'));
+  return row;
+}
+function activitySportCategory(activity) {
+  const aliases = {bike:'cycling',ride:'cycling',biking:'cycling',virtualride:'cycling',virtual_ride:'cycling',gravelride:'cycling',mountainbikeride:'cycling',mountain_bike:'cycling',indoorcycling:'cycling',indoor_cycling:'cycling',run:'running',trailrun:'running',trailrunning:'running',trail_run:'running',virtualrun:'running',swim:'swimming',openwaterswim:'swimming',open_water_swim:'swimming',weighttraining:'strength',weight_training:'strength',strengthtraining:'strength',strength_training:'strength',crossfit:'strength',gym:'strength',weightlifting:'strength',weight_lifting:'strength',palestra:'strength'};
+  const category = ['cycling','running','swimming','strength','other'].includes(activity.sport_category) ? activity.sport_category : null;
+  const raw = String(category || activity.sport || '').trim().toLocaleLowerCase('it-IT');
+  return aliases[raw] || raw;
 }
 function renderActivities() {
+  if(activityDiary){activityDiary.render();return;}
   const root = $('#activity-list'); root.replaceChildren();
   if (!state.activities.length) $('#activity-list').append(el('p', 'Non ci sono attività importate. Puoi importare un archivio JSON da Connessioni.', 'muted'));
   const filter = $('#activity-sport').value; const search = $('#activity-search').value.toLocaleLowerCase('it-IT');
-  const aliases = { bike: 'cycling', ride: 'cycling', virtualride: 'cycling', gravelride: 'cycling', mountainbikeride: 'cycling', run: 'running', trailrun: 'running', trailrunning: 'running', virtualrun: 'running', swim: 'swimming', openwaterswim: 'swimming', weighttraining: 'strength', weight_training: 'strength', biking: 'cycling', indoorcycling: 'cycling', indoor_cycling: 'cycling', mountain_bike: 'cycling', virtual_ride: 'cycling', trail_run: 'running', open_water_swim: 'swimming' };
-  const selected = state.activities.filter(a => (!filter || (filter==='other' ? !['cycling','running','swimming','strength'].includes(aliases[(a.sport||'').toLowerCase()] || (a.sport||'').toLowerCase()) : (aliases[(a.sport||'').toLowerCase()] || (a.sport||'').toLowerCase()) === filter)) && (!search || (a.name || '').toLocaleLowerCase('it-IT').includes(search)));
+  const selected = state.activities.filter(a => (!filter || (filter==='other' ? !['cycling','running','swimming','strength'].includes(activitySportCategory(a)) : activitySportCategory(a) === filter)) && (!search || (a.name || '').toLocaleLowerCase('it-IT').includes(search)));
   if (state.activities.length && !selected.length) $('#activity-list').append(el('p', 'Nessuna attività corrisponde ai filtri.', 'empty-state'));
   if (selected.length) root.append(el('p', `${Math.min(selected.length, state.activityLimit)} di ${selected.length} attività${filter || search ? ' corrispondenti ai filtri' : ' nello storico'}`, 'caption'));
   for (const activity of selected.slice(0, state.activityLimit)) {
-    const row = button('', () => action(() => showActivity(activity)), 'list-row'); const detail = el('div');
-    detail.append(el('strong', activity.name || sports[activity.sport] || activity.sport), el('small', `${activityDate(activity.start_time)} · ${sports[aliases[activity.sport] || activity.sport] || activity.sport} · Fonte: ${sourceLabel(activity.source)}`));
-    const rating=activity.coach_rating;if(rating){const vote=el('strong',rating.score==null?'N/D':`${number(rating.score)}/100`,'activity-rating');vote.dataset.tone=rating.score==null?'unknown':window.IronCoachMetricStatus.five(rating.score,'','').tone;detail.append(vote);}
-    row.append(detail, el('span', `${number(scaled(activity.duration_seconds, 60))} min · ${number(scaled(activity.distance_meters, 1000), 1)} km`, 'badge')); root.append(row);
+    root.append(activityDiaryRow(activity));
   }
   if (selected.length > state.activityLimit) root.append(button('Mostra altre 50 attività', () => {
     const position = state.activityLimit; state.activityLimit += 50; renderActivities();
     root.querySelectorAll('.list-row')[position]?.focus();
   }));
+}
+function activityDiaryRow(activity){
+  const row=button('',()=>action(()=>showActivity(activity)),'list-row'),detail=el('div');
+  const sportLabel=sports[activitySportCategory(activity)]||activity.sport||'Altro';
+  detail.append(el('strong',activity.name||sportLabel),el('small',`${activityDate(activity.start_time)} · ${sportLabel} · Fonte: ${sourceLabel(activity.source)}`));
+  const rating=activity.coach_rating;if(rating){const vote=el('strong',rating.score==null?'N/D':`${number(rating.score)}/100`,'activity-rating');vote.dataset.tone=rating.score==null?'unknown':window.IronCoachMetricStatus.five(rating.score,'','').tone;detail.append(vote);}
+  row.append(detail,el('span',`${number(scaled(activity.duration_seconds,60))} min · ${number(scaled(activity.distance_meters,1000),1)} km`,'badge'));return row;
 }
 function renderReview(summary) {
   const root=$('#weekly-review'),all=Object.values(summary.sports||{}),sessions=all.reduce((n,s)=>n+s.sessions,0),minutes=all.reduce((n,s)=>n+s.minutes,0);
@@ -387,7 +406,50 @@ $('#timer-pause').addEventListener('click', () => { renderTimer(); stopTimer(); 
 $('#timer-next').addEventListener('click', () => { stopTimer(); timer.index++; timer.remaining = (timer.steps[timer.index]?.duration_min || 0) * 60; renderTimer(); });
 $('#timer-reset').addEventListener('click', () => { if (state.selected) resetTimer(state.selected.plan); });
 $('#workout-dialog').addEventListener('close', stopTimer);
-async function showWorkout(plan, workout = null) {
+let workoutMatching = null; let reviewOpeningVersion = 0;
+function updateFeedbackAvailability() {
+  const submit = $('#feedback-form button[type="submit"]');
+  if (submit) submit.disabled = state.busy || state.selected?.feedbackAvailable === false;
+}
+function matchingController() {
+  if (workoutMatching || !window.IronWorkoutMatching) return workoutMatching;
+  const root = el('section', null, 'workout-matching'); root.id = 'workout-matching'; root.setAttribute('aria-label', 'Proposte di attività da abbinare');
+  $('#feedback-form').insertBefore(root, $('#feedback-activity').closest('label'));
+  workoutMatching = window.IronWorkoutMatching.create({root, select: $('#feedback-activity'), form: $('#feedback-form'), onRefresh: () => action(() => state.selected?.id ? loadWorkoutReview(state.selected) : Promise.resolve())}); return workoutMatching;
+}
+document.addEventListener('iron:pagechange', () => { reviewOpeningVersion++; });
+document.addEventListener('iron:weekchange', () => { reviewOpeningVersion++; });
+async function openWorkoutFromReview(id) {
+  const version = ++reviewOpeningVersion;
+  const review = await api(`/experience/workouts/${encodeURIComponent(id)}/review`);
+  if (version !== reviewOpeningVersion) return;
+  if (!review.workout?.payload) throw new Error('La seduta non è disponibile. Aggiorna la revisione e riprova.');
+  await showWorkout(review.workout.payload, review.workout, review);
+}
+async function loadWorkoutReview(selected, initialReview = null) {
+  const version = selected.reviewVersion = (selected.reviewVersion || 0) + 1;
+  const feedbackVersion = selected.feedbackVersion || 0;
+  const controller = matchingController(); controller?.loading();
+  try {
+    const review = initialReview || await api(`/experience/workouts/${selected.id}/review`);
+    if (state.selected !== selected || selected.reviewVersion !== version || (selected.feedbackVersion || 0) !== feedbackVersion) return;
+    const form = $('#feedback-form'); const dirty = Boolean(form.dataset.dirty);
+    selected.feedbackAvailable = review.feedback_available !== false;
+    updateFeedbackAvailability();
+    $('#feedback-issue')?.remove();
+    if (review.feedback_issue || !selected.feedbackAvailable) {
+      const issue = el('p', review.feedback_issue || 'Il feedback non è disponibile per questa seduta.', 'warning'); issue.id = 'feedback-issue'; issue.setAttribute('role', 'status'); form.before(issue);
+    }
+    controller?.render(review.activity_candidates, {activityId: review.feedback?.activity_id, preserveSelection: dirty});
+    if (review.feedback && !dirty) {
+      for (const key of ['rpe', 'completion_percent', 'feeling', 'notes']) if (form.elements[key]) form.elements[key].value = review.feedback[key] ?? '';
+      renderFeedback(review.feedback);
+    }
+  } catch (error) {
+    if (state.selected === selected && selected.reviewVersion === version) controller?.unavailable(() => action(() => loadWorkoutReview(selected)));
+  }
+}
+async function showWorkout(plan, workout = null, initialReview = null) {
   if (state.busy && state.selected?.id !== workout?.id && $('#workout-dialog').open) return;
   if ($('#feedback-form').dataset.dirty) {
     if (state.selected?.id === workout?.id) { if (!$('#workout-dialog').open) $('#workout-dialog').showModal(); return; }
@@ -400,6 +462,7 @@ async function showWorkout(plan, workout = null) {
     return;
   }
   state.selected = { plan, id: workout?.id, workout }; const selected = state.selected; const root = $('#workout-detail'); root.replaceChildren();
+  updateFeedbackAvailability();
   root.append(el('h2', `${sports[plan.sport] || plan.sport} · ${number(plan.duration_min)} minuti`), el('p', plan.purpose || plan.reason), el('p', plan.reason, 'muted'));
   const steps = el('ol', null, 'steps');
   for (const step of plan.steps || []) {
@@ -416,6 +479,7 @@ async function showWorkout(plan, workout = null) {
   if (!workout && !state.today?.training_paused && plan.steps?.length) extraActions.append(button('Salva questa proposta per oggi', () => action(() => saveToday(plan.sport)), 'primary'));
   else if (workout?.status === 'planned') extraActions.append(button('Ho meno tempo / sposta / salta', () => { $('#workout-dialog').close(); editSession(workout, 'shorten'); }));
   $('#feedback-form').hidden = !workout || ['skipped', 'cancelled', 'superseded'].includes(workout.status);
+  $('#feedback-issue')?.remove();
   $('#feedback-form').reset(); delete $('#feedback-form').dataset.dirty; $('#feedback-result')?.remove(); document.querySelectorAll('.match-suggestion, .dialog-notice').forEach(n => n.remove());
   $('#garmin-workout-status').textContent = workout ? 'Verifica dell’invio…' : 'Salva la seduta per preparare l’invio a Garmin.';
   $('#send-garmin').disabled = !workout; $('#export-workout').hidden = !workout;
@@ -423,30 +487,39 @@ async function showWorkout(plan, workout = null) {
   $('#export-fit').hidden = !workout || !['cycling', 'running'].includes(plan.sport);
   if (workout) $('#export-fit').href = `/workouts/${workout.id}/export.fit`;
   const select = $('#feedback-activity'); select.replaceChildren(el('option', 'Solo feedback manuale')); select.firstChild.value = '';
-  if (workout) for (const activity of state.activities.filter(a => (sports[a.sport] || a.sport) === (sports[workout.sport] || workout.sport) && Math.abs(new Date(a.start_time) - new Date(workout.date)) <= 3 * 86400000)) {
-    const option = el('option', `${activityDate(activity.start_time)} · ${activity.name || sports[activity.sport]} · ${number(activity.duration_seconds / 60)} min`); option.value = activity.id; select.append(option);
-  }
+  matchingController()?.reset();
   if (!$('#workout-dialog').open) $('#workout-dialog').showModal();
   if (workout) {
-    try {
-      const feedbackVersion = selected.feedbackVersion || 0;
-      const [delivery, review] = await Promise.all([api(`/workouts/${workout.id}/garmin/status`), api(`/experience/workouts/${workout.id}/review`)]);
-      if (state.selected !== selected) return;
-      $('#garmin-workout-status').textContent = delivery.message || delivery.delivery?.message || 'Invio reale da attivare con accesso ufficiale Garmin.';
-      if ((selected.feedbackVersion || 0) !== feedbackVersion) return;
-      if (review.feedback) { if (!$('#feedback-form').dataset.dirty) for (const key of ['rpe', 'completion_percent', 'feeling', 'notes', 'activity_id']) if ($('#feedback-form').elements[key]) $('#feedback-form').elements[key].value = review.feedback[key] ?? ''; renderFeedback(review.feedback); }
-      else if (review.suggested_match && !$('#feedback-form').dataset.dirty) { select.value = String(review.suggested_match.activity_id); $('#feedback-form').prepend(el('p', `Attività candidata · confidenza ${number(review.suggested_match.confidence)}%. Controlla l’abbinamento prima di salvare.`, 'match-suggestion')); }
-    } catch (error) { if (state.selected === selected) $('#garmin-workout-status').textContent = error.message; }
+    await Promise.allSettled([loadWorkoutReview(selected, initialReview), (async () => {
+      try {
+        const delivery = await api(`/workouts/${workout.id}/garmin/status`);
+        if (state.selected === selected) $('#garmin-workout-status').textContent = delivery.message || delivery.delivery?.message || 'Invio reale da attivare con accesso ufficiale Garmin.';
+      } catch (error) { if (state.selected === selected) $('#garmin-workout-status').textContent = error.message; }
+    })()]);
   }
 }
 function renderFeedback(feedback) {
   $('#feedback-result')?.remove(); const node = el('div', null, 'feedback-result'); node.id = 'feedback-result';
-  node.append(el('strong', 'Programmato / eseguito'), el('p', `${number(feedback.planned_duration_min)} / ${number(feedback.actual.duration_min)} minuti · Completamento ${number(feedback.evaluation.completion)}%`), el('p', feedback.source === 'activity' ? 'Durata misurata dall’attività associata.' : 'Durata ricavata dal completamento dichiarato.'), el('small', 'Confronto intensità per intervallo non disponibile senza dati delle singole fasi.')); $('#feedback-form').append(node);
+  const durationNote = feedback.source === 'activity' ? feedback.actual?.duration_min == null ? 'Durata non disponibile nell’attività associata: abbinamento confermato senza aderenza alla durata.' : 'Durata misurata dall’attività associata.' : 'Durata ricavata dal completamento dichiarato.';
+  node.append(el('strong', 'Programmato / eseguito'), el('p', `${number(feedback.planned_duration_min)} / ${number(feedback.actual?.duration_min)} minuti · Completamento ${number(feedback.evaluation?.completion)}%`), el('p', durationNote), el('small', 'Confronto intensità per intervallo non disponibile senza dati delle singole fasi.')); $('#feedback-form').append(node);
 }
 $('#feedback-form').addEventListener('submit', event => {
   event.preventDefault(); const form = event.currentTarget; if (!state.selected?.id) return;
+  if (state.selected.feedbackAvailable === false) { notice($('#feedback-issue')?.textContent || 'Il feedback non è disponibile per questa seduta.', true); return; }
   const id = state.selected.id; const payload = { rpe: Number(form.elements.rpe.value), completion_percent: Number(form.elements.completion_percent.value), feeling: form.elements.feeling.value, notes: form.elements.notes.value.trim(), activity_id: form.elements.activity_id.value ? Number(form.elements.activity_id.value) : null };
-  action(async () => { const result = await api(`/experience/workouts/${id}/feedback`, json('PUT', payload)); if (state.selected?.id === id) state.selected.feedbackVersion = (state.selected.feedbackVersion || 0) + 1; delete form.dataset.dirty; renderFeedback(result); await load(); notice('Feedback salvato. Il coach considera la risposta nelle prossime decisioni.'); });
+  if (payload.activity_id != null) {
+    const token = matchingController()?.tokenFor(payload.activity_id);
+    if (!token) { notice('Ricontrolla le proposte prima di salvare l’abbinamento oppure scegli Solo feedback manuale.', true); return; }
+    payload.activity_match_token = token;
+  }
+  action(async () => {
+    const result = await api(`/experience/workouts/${id}/feedback`, json('PUT', payload));
+    if (state.selected?.id === id) {
+      state.selected.feedbackVersion = (state.selected.feedbackVersion || 0) + 1;
+      matchingController()?.saved(payload.activity_id);
+    }
+    delete form.dataset.dirty; renderFeedback(result); await load(); notice('Feedback salvato. Il coach considera la risposta nelle prossime decisioni.');
+  });
 });
 $('#send-garmin').addEventListener('click', () => {
   if (!state.selected?.id) return; const id = state.selected.id;
@@ -681,9 +754,13 @@ $('#home-next').addEventListener('click', () => action(() => selectHomeDate(offs
 $('#home-today').addEventListener('click', () => action(() => selectHomeDate(athleteDate())));
 $('#home-date').addEventListener('change', event => { const value = event.target.value; action(() => selectHomeDate(value)); });
 $('#close-metric').addEventListener('click', () => $('#metric-dialog').close());
-function metricCoach(item, peers) {
+function metricCoach(item, peers,includeHomeContext=true) {
   const colors=window.IronCoachMetricStatus;
-  const own=item.kind==='readiness' ? item.status : colors?.metric(item,peers);
+  const own=item.kind==='readiness' ? item.status : item.recovery_trend ? colors?.trend({...item,...item.recovery_trend}) : colors?.metric(item,peers);
+  if(!includeHomeContext){
+    if(item.recovery_trend)return {...own,label:`Confronto tra mediane · ${own?.label||'Dati insufficienti'}`,evidence:[item.recovery_trend.explanation,own?.reason].filter(Boolean)};
+    return {...own,reason:own?.reason||item.explanation};
+  }
   const matching=(state.home?.condition||[]).find(p=>p.kind===item.kind && p.latest?.date===item.latest?.date && p.latest?.source===item.latest?.source);
   const contextual=item.kind==='readiness' || matching ? state.home?.metric_assessments?.[item.kind] : null;
   if(contextual)return {...contextual,...own,reason:contextual.explanation,action:contextual.actions?.[0]};
@@ -789,35 +866,59 @@ function weeklyChart(periods,key,assessment) {
   for(let i=0;i<=4;i++){const tick=el('span',number(max*i/4,key==='activities'?0:max<10?1:2));tick.style.left=`${i*25}%`;axis.append(tick);}chart.append(axis);panel.append(chart,tooltip);
   panel.append(el('p',ref==null?'Il riferimento sarà disponibile con uno storico confrontabile. N/D indica un dato mancante, non zero.':'Il tratteggio indica il riferimento storico personale, non un obiettivo di carico. N/D indica un dato mancante, non zero.','chart-data-note'));return panel;
 }
-function sparkline(item,compact=false) {
-  const points=(item.points||[]).filter(p=>p.value!=null&&Number.isFinite(p.value));
+function sparkline(item,compact=false,range=null) {
+  const points=(item.points||[]).filter(p=>p.value!=null&&Number.isFinite(p.value)&&(!range||(p.date>=range.from&&p.date<=range.to)));
   if(!points.length)return el('p','Nessuna osservazione nel periodo.','empty-state');
   const reference=['sleep_hours','hrv_ms','resting_hr_bpm'].includes(item.kind)&&!item.stale&&item.latest?.source!=='local_estimate'?window.IronCoachMetricStatus.band(item):null;
   const values=points.map(p=>p.value).concat(reference?[reference.lower,reference.upper]:[]),low=Math.min(...values),high=Math.max(...values),spread=high-low||Math.max(1,high*.1),minimum=item.kind==='tsb'?low-spread*.15:Math.max(0,low-spread*.15),maximum=high+spread*.18;
   const svg=chartFrame(`${item.label}: ${points.length} osservazioni`,item.unit,minimum,maximum);if(compact)svg.classList.add('chart-compact');
-  const first=Date.parse(points[0].date+'T12:00:00Z'),last=Date.parse(points.at(-1).date+'T12:00:00Z');
+  const first=Date.parse((range?.from||points[0].date)+'T12:00:00Z'),last=Date.parse((range?.to||points.at(-1).date)+'T12:00:00Z');
   const positions=points.map(p=>[last===first?335:60+550*(Date.parse(p.date+'T12:00:00Z')-first)/(last-first),212-(p.value-minimum)/(maximum-minimum)*188]);
   const palette=window.IronCoachMetricStatus.palette;
   if(reference){const y=v=>212-(v-minimum)/(maximum-minimum)*188;const band=svgNode('rect',{x:57,y:y(reference.upper),width:563,height:y(reference.lower)-y(reference.upper),fill:'#d8efdc',class:'reference-band'});band.append(svgNode('title',{},`Fascia abituale personale: ${number(reference.lower,1)}–${number(reference.upper,1)} ${item.unit}. Descrive lo storico, non una zona ottimale.`));svg.append(band);for(const v of [reference.lower,reference.upper])svg.append(svgNode('line',{x1:57,x2:620,y1:y(v),y2:y(v),stroke:'#78a886','stroke-dasharray':'4 4'}));}
   points.forEach((p,i)=>{const status=window.IronCoachMetricStatus.metric({...item,points:points.slice(0,i+1),latest:p,baseline:null,reference_range:null,stale:false},(state.health?.metrics||[]).map(peer=>({...peer,latest:peer.points?.find(point=>point.date===p.date),stale:false}))),color=status.tone==='unknown'?palette.neutral:palette[status.tone]||palette.neutral;
-    if(i && Date.parse(p.date)-Date.parse(points[i-1].date)<=2*86400000) svg.append(svgNode('line',{x1:positions[i-1][0],y1:positions[i-1][1],x2:positions[i][0],y2:positions[i][1],stroke:'#2a6079','stroke-width':'2.2','stroke-linecap':'round'}));
+    if(i && Date.parse(p.date)-Date.parse(points[i-1].date)<=86400000) svg.append(svgNode('line',{x1:positions[i-1][0],y1:positions[i-1][1],x2:positions[i][0],y2:positions[i][1],stroke:'#2a6079','stroke-width':'2.2','stroke-linecap':'round'}));
     const dot=svgNode('circle',{cx:positions[i][0],cy:positions[i][1],r:i===points.length-1?4.5:2.5,fill:i===points.length-1?color:'#2a6079',stroke:'#fff','stroke-width':'1.5'});dot.append(svgNode('title',{},`${dayLabel(p.date)}: ${number(p.value,1)} ${item.unit}`));svg.append(dot);
   });
-  for(const i of [...new Set([0,Math.floor((points.length-1)/2),points.length-1])])svg.append(svgNode('text',{x:positions[i][0],y:239,'text-anchor':'middle',class:'axis-label'},dayLabel(points[i].date)));
+  if(range){for(const [x,date] of [[60,range.from],[335,offsetDate(range.from,Math.floor((last-first)/86400000/2))],[610,range.to]])svg.append(svgNode('text',{x,y:239,'text-anchor':'middle',class:'axis-label'},dayLabel(date)));}
+  else for(const i of [...new Set([0,Math.floor((points.length-1)/2),points.length-1])])svg.append(svgNode('text',{x:positions[i][0],y:239,'text-anchor':'middle',class:'axis-label'},dayLabel(points[i].date)));
   return svg;
 }
-function openHealthMetric(item) {
+function healthSeriesDetails(metric,fromDay,toDay) {
+  const points=(metric.points||[]).filter(p=>p.date>=fromDay&&p.date<=toDay&&Number.isFinite(p.value)).sort((a,b)=>a.date.localeCompare(b.date));
+  const summary=el('div',null,'health-series-summary'),latest=points.at(-1);
+  const days=Math.round((Date.parse(toDay+'T12:00:00Z')-Date.parse(fromDay+'T12:00:00Z'))/86400000)+1;
+  const fields=[
+    ['Ultima misura',latest?`${number(latest.value,1)} ${metric.unit}`:'N/D',latest?`${dayLabel(latest.date)} · ${sourceLabel(latest.source)}`:'Nessuna misura nel periodo'],
+    ['Giorni con misure',`${new Set(points.map(p=>p.date)).size} / ${days}`,'I giorni senza dati restano vuoti.'],
+  ];
+  const trend=metric.recovery_trend;
+  if(trend){fields.unshift(
+    ['Mediana delle ultime 3 letture',trend.current==null?'N/D':`${number(trend.current,1)} ${metric.unit}`,(trend.recent_dates||[]).map(dayLabel).join(' · ')||'Servono tre letture recenti utilizzabili.'],
+    ['Riferimento personale',trend.baseline==null?'N/D':`${number(trend.baseline,1)} ${metric.unit}`,`${number(trend.counts?.baseline||0)} letture precedenti · ${sourceLabel(trend.source)}`],
+  );}
+  for(const [label,value,note] of fields){const tile=el('div');tile.append(el('small',label),el('strong',value),el('span',note));summary.append(tile);}
+  if(trend){const note=el('p',`${trend.stale?'Confronto da aggiornare. ':''}${trend.explanation||''} La mediana riassume più letture e può differire dall’ultima misura.`, 'chart-data-note');note.style.gridColumn='1 / -1';summary.append(note);}
+  const details=el('details',null,'health-series-data');details.append(el('summary','Leggi date, valori e fonti'));
+  const table=el('table');table.append(el('caption',`${metric.label} · ${fromDay} — ${toDay}`));
+  const head=el('thead'),headRow=el('tr');for(const label of ['Data',`Valore · ${metric.unit}`,'Fonte']){const th=el('th',label);th.scope='col';headRow.append(th);}head.append(headRow);table.append(head);
+  const body=el('tbody');for(const point of points){const row=el('tr');row.append(el('td',new Date(point.date+'T12:00:00Z').toLocaleDateString('it-IT',{timeZone:'UTC'})),el('td',number(point.value,2)),el('td',sourceLabel(point.source)));body.append(row);}table.append(body);
+  details.append(table,el('p',points.length?'Sono elencate le misure registrate. Un giorno assente non vale zero; le interruzioni della linea indicano giorni senza misure.':'Nessuna misura disponibile nelle date selezionate.','chart-data-note'));
+  return {summary,details};
+}
+function openHealthMetric(item,range={}) {
   const root=$('#metric-detail');$('#metric-dialog-title').textContent=item.label;
-  const draw=(metric,fromDay=offsetDate(athleteDate(),-27),toDay=athleteDate())=>{
+  const draw=(metric,fromDay=range.from||offsetDate(athleteDate(),-27),toDay=range.to||athleteDate())=>{
     root.replaceChildren();root.dataset.tone='neutral';
     const form=el('form',null,'chart-range');
     for(const [name,label,value] of [['from','Dal',fromDay],['to','Al',toDay]]){const field=el('label',label),input=el('input');input.type='date';input.name=name;input.value=value;input.required=true;field.append(input);form.append(field);}
     const submit=el('button','Aggiorna','outline');submit.type='submit';form.append(submit);
-    const panel=el('figure',null,'chart-panel');panel.append(el('figcaption',`${metric.label} · ${metric.unit}`,'chart-panel-heading'),sparkline(metric));
+    const data=healthSeriesDetails(metric,fromDay,toDay),panel=el('figure',null,'chart-panel');panel.append(el('figcaption',`${metric.label} · ${metric.unit}`,'chart-panel-heading'),data.summary,sparkline(metric,false,{from:fromDay,to:toDay}));
     const reference=['sleep_hours','hrv_ms','resting_hr_bpm'].includes(metric.kind)&&!metric.stale&&metric.latest?.source!=='local_estimate'?window.IronCoachMetricStatus.band(metric):null;panel.append(el('p',reference?`Fascia verde: intervallo abituale personale ${number(reference.lower,1)}–${number(reference.upper,1)} ${metric.unit}, da ${reference.count} letture precedenti comparabili. Descrive la variabilità, non un obiettivo da inseguire.`:'Nessuna fascia personale affidabile disponibile per questa metrica. I punti mostrano soltanto le misure registrate.','chart-data-note'));
-    const verdict=el('section',null,'health-coach-detail');showCoachJudgment(verdict,metricCoach(metric,state.health?.metrics||[]));
-    root.append(form,panel,verdict);
-    form.addEventListener('submit',event=>{event.preventDefault();const from=form.elements.from.value,to=form.elements.to.value;action(async()=>{if(from>to)throw new Error('La data iniziale deve precedere quella finale.');const data=await api(`/health/metrics?from=${from}&to=${to}`);const found=data.metrics.find(m=>m.kind===item.kind);draw(found||{...item,points:[],latest:null},from,to);});});
+    if(metric.recovery_trend)panel.append(el('p','La fascia descrive la variabilità delle letture precedenti. Il confronto tra mediane descrive separatamente lo scostamento delle tre letture recenti.','chart-data-note'));
+    const verdict=el('section',null,'health-coach-detail');showCoachJudgment(verdict,metricCoach(metric,state.health?.metrics||[],false));
+    panel.append(data.details);root.append(form,panel,verdict);
+    form.addEventListener('submit',event=>{event.preventDefault();const from=form.elements.from.value,to=form.elements.to.value;action(async()=>{if(from>to)throw new Error('La data iniziale deve precedere quella finale.');const data=await api(`/health/metrics?from=${from}&to=${to}`);const found=data.metrics.find(m=>m.kind===item.kind);draw(found||{...item,points:[],latest:null,baseline:null,reference_range:null,recovery_trend:null},from,to);});});
   };draw(item);$('#metric-dialog').showModal();
 }
 function renderHealth(value) {
@@ -827,7 +928,7 @@ function renderHealth(value) {
   for(const item of value.metrics||[]){if(['stress_score','stress_level','steps','daily_activity_load','daily_ctl_load','daily_atl_load','body_battery_min','body_battery_max'].includes(item.kind))continue;if(item.kind==='body_battery'&&!item.latest)continue;const card=el('article',null,'card health-card clickable-card'),latest=item.latest;
     card.append(el('h2',item.label),el('strong',latest?`${number(latest.value,1)} ${item.unit}`:'N/D','health-value'),sparkline(item,true));
     const verdict=window.IronCoachMetricStatus.metric(item,value.metrics||[]);if(verdict.label==='Dato di contesto')continue;window.IronCoachMetricStatus.apply(card,verdict,false);
-    const open=button('Analisi e andamento ↗',()=>openHealthMetric(item),'metric-open');open.setAttribute('aria-label',`Apri ${item.label}`);open.setAttribute('aria-haspopup','dialog');card.append(open);root.append(card);
+    const open=button('Analisi e andamento ↗',()=>openHealthMetric(item,{from:value.from,to:value.to}),'metric-open');open.setAttribute('aria-label',`Apri ${item.label}`);open.setAttribute('aria-haspopup','dialog');card.append(open);root.append(card);
   }
 }
 function assessmentContent(root, assessment, heading = 'Valutazione') {
@@ -880,8 +981,12 @@ async function showActivity(activity) {
     if(value==null)continue;const card=el('div',null,'activity-stat');card.dataset.stat=label.includes('FC')?'heart':label.includes('Potenza')?'power':label==='Distanza'?'distance':label==='Dislivello'?'altitude':'general';card.append(el('small',label),el('strong',formatter?formatter(value):`${number(value,['km','km/h'].includes(unit)?1:0)} ${unit}`));stats.append(card);
   }header.append(stats);root.replaceChildren(header,activityRoute(detail.route));
   if(detail.streams?.length){const panel=el('section',null,'activity-stream-panel chart-panel'),top=el('div',null,'chart-panel-heading'),label=el('label','Andamento'),select=el('select');select.name='activity_stream';
-    for(const stream of detail.streams){const option=el('option',stream.label);option.value=stream.kind;select.append(option);}label.append(select);top.append(label);panel.append(top);const chart=el('div'),views=new Map();panel.append(chart);const draw=()=>{const stream=detail.streams.find(s=>s.kind===select.value);if(!views.has(stream.kind))views.set(stream.kind,activityStreamChart(stream,detail.chart_references?.[stream.kind]));chart.replaceChildren(views.get(stream.kind));};select.addEventListener('change',draw);draw();root.append(panel);
-  }else root.append(el('p',detail.availability?.message||'I riepiloghi sono disponibili; questa attività non contiene serie temporali.','caption'));
+    for(const stream of detail.streams){const option=el('option',stream.label);option.value=stream.kind;select.append(option);}label.append(select);top.append(label);panel.append(top);const quality=window.IronCoachCharts?.quality(detail);if(quality)panel.append(quality);const chart=el('div'),views=new Map();panel.append(chart);const draw=()=>{const stream=detail.streams.find(s=>s.kind===select.value);if(!views.has(stream.kind))views.set(stream.kind,activityStreamChart(stream,detail.chart_references?.[stream.kind]));chart.replaceChildren(views.get(stream.kind));};select.addEventListener('change',draw);draw();const effort=window.IronActivityEffort?.render(detail);if(effort)panel.append(effort);
+    const highlight=(interval,kinds,label)=>{const kind=kinds.find(kind=>detail.streams.some(stream=>stream.kind===kind));if(!kind)return;select.value=kind;draw();views.get(kind).dispatchEvent(new CustomEvent('iron:chartinterval',{detail:{start_s:interval.start_s,end_s:interval.end_s,label}}));};
+    const best=window.IronPowerDuration?.render(detail,{onSelect:interval=>highlight(interval,['power'],`Migliore media su ${timeLabel(interval.duration_seconds)}`)});if(best)panel.append(best);
+    const distanceKinds=['distance','pace','speed'],canHighlightDistance=detail.streams.some(stream=>distanceKinds.includes(stream.kind));
+    for(const value of [detail.distance_efforts,detail.pool_efforts]){const distance=window.IronDistanceEfforts?.render(value,{onSelect:canHighlightDistance?interval=>highlight(interval,distanceKinds,`Migliore tempo su ${number(interval.distance_value??interval.distance_meters)} ${interval.distance_unit||'m'}`):undefined});if(distance)panel.append(distance);}root.append(panel);
+  }else {const quality=window.IronCoachCharts?.quality(detail);if(quality)root.append(quality);root.append(el('p',detail.availability?.message||'I riepiloghi sono disponibili; questa attività non contiene serie temporali.','caption'));const best=window.IronPowerDuration?.render(detail);if(best)root.append(best);for(const value of [detail.distance_efforts,detail.pool_efforts]){const distance=window.IronDistanceEfforts?.render(value);if(distance)root.append(distance);}}
   if(rating){const coach=el('section',null,'activity-coach');assessmentContent(coach,rating,'IL COACH SULLA SEDUTA');root.append(coach);}else{const coach=el('section',null,'activity-coach');coach.dataset.tone='unknown';coach.append(el('h3','Valutazione non disponibile'),el('p','Il riepilogo resta consultabile. Riprova per aggiornare il giudizio.'),button('Riprova',()=>action(()=>showActivity(activity))));root.append(coach);}
   if(detail.provider_url){const link=el('a','Apri attività originale ↗','button-link outline');const url=new URL(detail.provider_url);if(url.protocol==='https:'&&url.hostname==='intervals.icu'){link.href=url.href;link.target='_blank';link.rel='noopener noreferrer';root.append(link);}}
 }
@@ -890,7 +995,9 @@ function renderDuplicates(values) {
   for (const item of values) {
     const row = el('article', null, 'duplicate-row');
     for (const activity of [item.activity, item.other]) row.append(el('p', `${activity.name || 'Attività'} · ${sourceLabel(activity.source)} · ${activityDate(activity.start_time)} · ${number(scaled(activity.duration_seconds, 60))} min · ${number(scaled(activity.distance_meters, 1000), 1)} km`));
-    const actions = el('div', null, 'action-group'); for (const [choice, label] of [['merge', 'È la stessa attività: unisci'], ['keep', 'Sono attività distinte']]) actions.append(button(label, () => action(async () => { await api(`/activities/duplicates/${item.id}/${choice}`, json('POST', {})); await load(); notice(choice === 'merge' ? 'Fonti riunite in una sola attività.' : 'Attività mantenute separate.'); }))); row.append(actions); root.append(row);
+    const actions = el('div', null, 'action-group');
+    const compare = button('Apri confronto', () => window.IronCoachUI?.openDuplicateReview ? window.IronCoachUI.openDuplicateReview(item.id, compare) : notice('Il confronto non è disponibile. Aggiorna la pagina e riprova.', true)); compare.setAttribute('aria-haspopup', 'dialog'); actions.append(compare);
+    actions.append(button('Sono attività distinte', () => action(async () => { await api(`/activities/duplicates/${item.id}/keep`, json('POST', {})); await load(); notice('Attività mantenute separate.'); }))); row.append(actions); root.append(row);
   }
 }
 const requirementLabels = { weekly_hours: 'Volume settimanale · ore', longest_distance_km: 'Seduta lunga · km', longest_elevation_m: 'Dislivello in una seduta · m', terrain_confirmed: 'Preparazione sul terreno', altitude_confirmed: 'Preparazione in quota' };
@@ -983,7 +1090,7 @@ $('#health-range').addEventListener('submit', event => {
   });
 });
 function resetActivityFilters() { state.activityLimit = 50; renderActivities(); }
-$('#activity-sport').addEventListener('change', resetActivityFilters); $('#activity-search').addEventListener('input', resetActivityFilters); $('#close-activity').addEventListener('click', () => $('#activity-dialog').close());
+if(!window.IronActivityDiary){$('#activity-sport').addEventListener('change',resetActivityFilters);$('#activity-search').addEventListener('input',resetActivityFilters);}$('#close-activity').addEventListener('click', () => $('#activity-dialog').close());
 const activeSyncs = new Map();
 function syncMessage(run) {
   const result = run.result || {}; const labels = { queued: 'In coda', running: 'Sincronizzazione in corso', completed: 'Completata', success: 'Completata', partial: 'Completata parzialmente', partial_success: 'Completata parzialmente', error: 'Non completata', failed: 'Non completata' };
@@ -1033,13 +1140,19 @@ function addStravaConnection() {
 $('#current-date').textContent = new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date()).toUpperCase();
 $('#backend-origin').textContent = location.origin;
 $('#metrics').replaceChildren(...['Fitness · CTL', 'Fatica · ATL', 'Bilancio · TSB', 'Recupero'].map(label => metric(label, '—', 'In attesa dei dati')));
-mergePlanSections(); enhanceProfile(); addImportTools(); addIntervalsConnection(); addStravaConnection(); page(location.hash.slice(1) || 'today'); action(load);
+mergePlanSections(); enhanceProfile(); addImportTools(); addIntervalsConnection(); addStravaConnection();
+if(window.IronActivityDiary)activityDiary=window.IronActivityDiary.create({root:$('#activity-list'),sport:$('#activity-sport'),search:$('#activity-search'),fetchPage:(path,signal)=>api(path,{signal}),renderRow:activityDiaryRow,onItems:items=>state.activities=items,onArchiveTotal:total=>{
+  state.activityArchiveTotal=total;const previous=window.ironViewSnapshot||{},hasActivities=total>0;
+  if(previous.hasActivities!==hasActivities){window.ironViewSnapshot={...previous,hasActivities};document.dispatchEvent(new CustomEvent('iron:loaded',{detail:window.ironViewSnapshot}));}
+}});
+page(location.hash.slice(1) || 'today'); action(load);
 window.IronCoachUI = { api, action, load, el, button, number, sourceLabel, sparkline,
-  openHealthMetric, appendBodyMass, openWorkout:showWorkout,
+  openHealthMetric, appendBodyMass, openWorkout:showWorkout, showWorkout, openWorkoutFromReview,
   openActivity: id=>action(()=>showActivity(state.activities.find(a=>a.id===id)||{id})),
   context: () => ({weekStart:state.weekStart, revision:state.settingsRevision, raceGoalId:state.settings?.race_goal_id}),
   navigate: id => page(id, true),
   resetAfterRestore: () => {
+    activityDiary?.reset();state.activityArchiveTotal=null;
     state.selected = null; state.settings = null; state.settingsRevision = null;
     for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
     for (const form of document.querySelectorAll('form')) { delete form.dataset.dirty; delete form.dataset.thresholdDirty; }

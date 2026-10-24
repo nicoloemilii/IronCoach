@@ -264,7 +264,7 @@ def add_feedback(db, sport="running", days_ago=2, **content):
     workout = Workout(date=(planning._today() - timedelta(days=days_ago)).isoformat(), sport=sport, name="Seduta conclusa", duration_min=30, payload_json="{}", status="completed")
     db.add(workout)
     db.flush()
-    feedback = SessionFeedback(workout_id=workout.id, payload_json=json.dumps({"rpe": 9, "completion_percent": 100, "feeling": "harder", **content}))
+    feedback = SessionFeedback(workout_id=workout.id, payload_json=json.dumps({"rpe": 9, "completion_percent": 100, "feeling": "harder", "actual": {"duration_min": 30}, **content}))
     db.add(feedback)
     db.commit()
     return feedback
@@ -294,7 +294,7 @@ def test_low_actual_completion_reduces_and_old_edited_feedback_is_ignored(db, mo
     add_feedback(db, days_ago=40)
     old_only = planning.generate_week(db, monday)
     assert old_only["feedback_adaptation"]["sports"]["running"]["samples"] == 0
-    add_feedback(db, rpe=4, feeling="as_expected", evaluation={"completion": 50})
+    add_feedback(db, rpe=4, feeling="as_expected", actual={"duration_min": 15}, evaluation={"completion": 50})
     adapted = planning.generate_week(db, monday, regenerate=True)
     assert adapted["feedback_adaptation"]["sports"]["running"]["factor"] == .8
     assert adapted["target_minutes"] < old_only["target_minutes"]

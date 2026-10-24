@@ -8,6 +8,7 @@ import math
 from datetime import datetime, timedelta
 from typing import Iterable
 from app.services.athlete_clock import activity_day, athlete_today, as_utc_naive, utc_now_naive
+from app.services.observed_load import resolve_observed_loads, finite_load
 
 _LOAD_SNAPSHOT = ContextVar('activity_load_snapshot', default=None)
 
@@ -28,7 +29,7 @@ def _observed_load(payload):
 
 
 @contextmanager
-def activity_load_snapshot(db):
+def activity_load_snapshot(db, activities=None):
     """Batch observations for one read operation, scoped to its exact session.
 
     Presence with a null load differs from no remote observation. A ContextVar
@@ -39,13 +40,9 @@ def activity_load_snapshot(db):
     if current is not None and current[0] is db:
         yield current[1]
         return
-    from app.db.iron_models import ActivityObservation
-    values = {}
-    for identifier, payload in db.query(ActivityObservation.activity_id, ActivityObservation.payload_json).filter(
-            ActivityObservation.source_key.like('intervals:%')).order_by(ActivityObservation.id).all():
-        if identifier not in values:
-            values[identifier] = _observed_load(payload)
-    token = _LOAD_SNAPSHOT.set((db, values))
+    details = resolve_observed_loads(db, activities)
+    values = {identifier: item['value'] for identifier, item in details.items() if item['observation_count']}
+    token = _LOAD_SNAPSHOT.set((db, values, details))
     try:
         yield values
     finally:
@@ -53,16 +50,17 @@ def activity_load_snapshot(db):
 
 
 CYCLING_SPORTS = {
-    "bike", "cycling", "biking", "virtualride", "virtual_ride",
+    "bike", "ride", "cycling", "biking", "virtualride", "virtual_ride",
     "indoorcycling", "indoor_cycling", "mountainbikeride", "mountain_bike", "gravelride",
 }
 RUNNING_SPORTS = {"run", "running", "trailrun", "trailrunning", "trail_run", "virtualrun"}
 SWIM_SPORTS = {"swim", "swimming", "openwaterswim", "open_water_swim"}
-STRENGTH_SPORTS = {"strength", "weighttraining", "weight_training"}
+STRENGTH_SPORTS = {"strength", "weighttraining", "weight_training", "strengthtraining", "strength_training",
+                   "crossfit", "gym", "palestra", "weightlifting", "weight_lifting"}
 
 
 def sport_key(sport: str | None) -> str:
-    value = (sport or "unknown").lower().strip()
+    value = sport.lower().strip() if isinstance(sport, str) else 'unknown'
     if value in CYCLING_SPORTS:
         return "bike"
     if value in RUNNING_SPORTS:
@@ -75,11 +73,16 @@ def sport_key(sport: str | None) -> str:
 
 
 def cycling_tss(duration_seconds: float | None, normalized_power: float | None, ftp_watts: float) -> float:
-    if not duration_seconds or not normalized_power or ftp_watts <= 0:
+    duration_seconds = finite_load(duration_seconds)
+    normalized_power = finite_load(normalized_power)
+    ftp_watts = finite_load(ftp_watts)
+    if not duration_seconds or not normalized_power or not ftp_watts:
         return 0.0
-    duration_hours = float(duration_seconds) / 3600.0
-    intensity_factor = float(normalized_power) / float(ftp_watts)
-    return round(100.0 * duration_hours * intensity_factor**2, 1)
+    try:
+        calculated = 100.0 * (duration_seconds / 3600.0) * (normalized_power / ftp_watts) ** 2
+    except (OverflowError, ZeroDivisionError):
+        return 0.0
+    return round(calculated, 1) if math.isfinite(calculated) else 0.0
 
 
 def activity_load(activity, ftp_watts: float) -> float:
@@ -91,67 +94,83 @@ def activity_load(activity, ftp_watts: float) -> float:
     No synthetic cross-sport multipliers are applied.
     """
     # Intervals analyzed load is authoritative, including an explicit zero.
-    remote_cleared = False
     if getattr(activity, 'id', None) is not None:
         from sqlalchemy.orm import object_session
         from sqlalchemy.orm.exc import UnmappedInstanceError
-        from app.db.iron_models import ActivityObservation
         try: db = object_session(activity)
         except UnmappedInstanceError: db = None
         if db:
             snapshot = _LOAD_SNAPSHOT.get()
-            if snapshot is not None and snapshot[0] is db:
-                observed = activity.id in snapshot[1]
-                known = snapshot[1].get(activity.id)
+            if snapshot is not None and snapshot[0] is db and activity.id in snapshot[2]:
+                evidence = snapshot[2][activity.id]
             else:
-                observation = db.query(ActivityObservation).filter(ActivityObservation.activity_id == activity.id, ActivityObservation.source_key.like('intervals:%')).first()
-                observed = observation is not None
-                known = _observed_load(observation.payload_json) if observed else None
-            if observed:
-                if known is not None: return round(max(0, float(known)), 1)
-                remote_cleared = True
-    if not remote_cleared and getattr(activity, 'source', None) == 'intervals' and getattr(activity, 'load', None) is not None:
-        return round(max(0, float(activity.load)), 1)
-    sport = (activity.sport or "").lower()
+                evidence = resolve_observed_loads(db, [activity])[activity.id]
+            if evidence['observation_count']:
+                # Legacy fitness requires a numeric input. Zero here is a model
+                # imputation for unavailable load, never a measured zero; raw
+                # aggregates use the resolver's None and provenance instead.
+                return round(evidence['value'], 1) if evidence['value'] is not None else 0.0
+    stored = finite_load(getattr(activity, 'load', None))
+    if getattr(activity, 'source', None) == 'intervals' and stored is not None:
+        return round(stored, 1)
+    sport = activity.sport.lower().strip() if isinstance(activity.sport, str) else ''
     if sport in CYCLING_SPORTS:
         calculated = cycling_tss(activity.duration_seconds, activity.normalized_power, ftp_watts)
         if calculated > 0:
             return calculated
 
-    stored = None if remote_cleared else getattr(activity, "load", None)
-    try:
-        value = float(stored)
-    except (TypeError, ValueError):
-        return 0.0
-    return round(value, 1) if value >= 0 else 0.0
+    return round(stored, 1) if stored is not None else 0.0
 
 
-def _valid_activity(activity) -> bool:
+def _valid_activity(activity, known_load=None) -> bool:
     """Exclude obvious malformed zero/near-zero sessions from fitness load."""
     if not activity.start_time:
         return False
-    try:
-        duration = float(activity.duration_seconds or 0)
-    except (TypeError, ValueError):
-        duration = 0
+    duration = finite_load(activity.duration_seconds)
     # A 38-second open-water activity with no distance/load is a data-quality
     # artifact for training analysis, not a meaningful workout.
-    if duration < 60 and not (activity.load and float(activity.load) > 0):
+    effective = finite_load(known_load) if known_load is not None else finite_load(activity.load)
+    if (duration is None or duration < 60) and not (effective or 0) > 0:
         return False
     return True
+
+
+def _effective_loads(activities, ftp_watts):
+    """Batch each session once, including positive observed load without duration."""
+    from sqlalchemy.orm import object_session
+    from sqlalchemy.orm.exc import UnmappedInstanceError
+    groups = defaultdict(list); values = {}
+    for activity in activities:
+        try:
+            db = object_session(activity)
+        except UnmappedInstanceError:
+            db = None
+        groups[db].append(activity)
+    for db, rows in groups.items():
+        if db is None:
+            for row in rows:
+                values[id(row)] = activity_load(row, ftp_watts)
+        else:
+            with activity_load_snapshot(db, rows):
+                for row in rows:
+                    values[id(row)] = activity_load(row, ftp_watts)
+    return values
 
 
 def daily_loads(activities: Iterable, ftp_watts: float, end_date=None):
     now = utc_now_naive()
     end_date = end_date or athlete_today(now)
+    activities = [row for row in activities if isinstance(getattr(row, 'start_time', None), datetime)
+                  and as_utc_naive(row.start_time) <= now and activity_day(row.start_time) <= end_date]
+    loads = _effective_loads(activities, ftp_watts)
     by_day = defaultdict(float)
     for activity in activities:
-        if not _valid_activity(activity) or as_utc_naive(activity.start_time) > now:
+        if not _valid_activity(activity, loads[id(activity)]):
             continue
         day = activity_day(activity.start_time)
         if day > end_date:
             continue
-        by_day[day] += activity_load(activity, ftp_watts)
+        by_day[day] += loads[id(activity)]
     if not by_day:
         return []
     first = min(by_day)
@@ -166,16 +185,19 @@ def daily_loads(activities: Iterable, ftp_watts: float, end_date=None):
 def daily_loads_by_sport(activities: Iterable, ftp_watts: float, end_date=None):
     now = utc_now_naive()
     end_date = end_date or athlete_today(now)
+    activities = [row for row in activities if isinstance(getattr(row, 'start_time', None), datetime)
+                  and as_utc_naive(row.start_time) <= now and activity_day(row.start_time) <= end_date]
+    loads = _effective_loads(activities, ftp_watts)
     by_day = defaultdict(lambda: defaultdict(float))
     first_date = None
     for activity in activities:
-        if not _valid_activity(activity) or as_utc_naive(activity.start_time) > now:
+        if not _valid_activity(activity, loads[id(activity)]):
             continue
         day = activity_day(activity.start_time)
         if day > end_date:
             continue
         first_date = day if first_date is None or day < first_date else first_date
-        by_day[day][sport_key(activity.sport)] += activity_load(activity, ftp_watts)
+        by_day[day][sport_key(activity.sport)] += loads[id(activity)]
     if first_date is None:
         return []
 

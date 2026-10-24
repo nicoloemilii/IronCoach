@@ -24,9 +24,12 @@ from app.api.routes_activity_detail import router as activity_detail_router
 from app.db.health_reports import ensure_health_reports_schema
 from app.api.routes_training import router as training_router
 from app.api.routes_training_insights import router as training_insights_router
+from app.api.routes_training_response import router as training_response_router
+from app.api.routes_duplicate_review import router as duplicate_review_router
 from app.db.training_models import ensure_training_schema
 from app.db.migrations import migrate
-from app.services import sync_jobs
+from app.services import sync_jobs, effort_jobs
+from app.api.routes_effort_records import router as effort_records_router
 from app.commercial.config import from_env
 
 SETTINGS = from_env()
@@ -39,9 +42,11 @@ if not SETTINGS.hosted:
 
 @asynccontextmanager
 async def lifespan(app):
+    effort_jobs.start()
     if SETTINGS.hosted:sync_jobs.start_hosted(app.state.accounts)
     else:sync_jobs.start()
     yield
+    effort_jobs.stop()
     sync_jobs.stop()
 
 app = FastAPI(
@@ -68,6 +73,9 @@ app.include_router(health_reports_router)
 app.include_router(activity_detail_router)
 app.include_router(training_router)
 app.include_router(training_insights_router)
+app.include_router(training_response_router)
+app.include_router(duplicate_review_router)
+app.include_router(effort_records_router)
 
 # A restore must not race a request that read an old workout/profile and then
 # writes after replacement. Read-only navigation remains concurrent.

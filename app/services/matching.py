@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 from datetime import datetime
+import math
 from app.services.training_load import activity_load, sport_key
 from app.services.athlete_clock import activity_day, athlete_today, as_utc_naive, utc_now_naive
 
@@ -132,29 +133,29 @@ def match_workout_activity(
 
 
 def activity_to_actual(a) -> dict:
+    def value(number):
+        return float(number) if isinstance(number, (int,float)) and not isinstance(number,bool) and math.isfinite(number) and number >= 0 else None
+    duration = value(a.duration_seconds)
     return {
         "activity_id": a.id,
-        "duration_min": round(
-            float(a.duration_seconds or 0) / 60.0,
-            1
-        ),
+        "duration_min": round(duration / 60.0, 1) if duration is not None else None,
         "avg_power_w": (
-            float(a.avg_power)
+            value(a.avg_power)
             if a.avg_power is not None
             else None
         ),
         "normalized_power_w": (
-            float(a.normalized_power)
+            value(a.normalized_power)
             if a.normalized_power is not None
             else None
         ),
         "avg_hr_bpm": (
-            float(a.avg_hr)
+            value(a.avg_hr)
             if a.avg_hr is not None
             else None
         ),
         "load": (
-            float(a.load)
+            value(a.load)
             if a.load is not None
             else None
         ),

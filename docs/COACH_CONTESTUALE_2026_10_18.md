@@ -8,6 +8,6 @@ La policy è applicata sia alla proposta GET sia alla creazione POST, comprese d
 
 Le card condizione aprono solo giudizio e indicazione del Coach. Le card settimanali aggiungono un grafico a barre cronologico con valori, date e titolo accessibile. Dislivello: somma dei valori presenti, attività senza misura escluse dal conteggio. Etichetta visibile: Coach.
 
-Verifica: 377 test Python e 73 test DOM/regole/usabilità. Il controllo API sul server personale ha rilevato carico 391, +49% sul riferimento, recupero 53,6/100, obiettivo Xtream Triathlon, dislivello 492 m e proposta coerente di 30 minuti RPE 3. Nessun nuovo allenamento personale è stato salvato dalla verifica. Test di salvataggio e blocco dei duplicati eseguiti su database isolato.
+Verifica: 377 test Python e 73 test DOM/regole/usabilità. Nessun nuovo allenamento personale è stato salvato dalla verifica. Test di salvataggio e blocco dei duplicati eseguiti su database isolato.
 
 Limite: la verifica visiva nel browser resta non eseguita perché l’accesso browser è stato negato; i test DOM non la sostituiscono. Il colore rosso è stato aggiornato rispetto alla precedente verifica cromatica: il vecchio minimo 5,30:1 non è una nuova certificazione del layout.

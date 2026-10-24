@@ -1,0 +1,25 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+const {JSDOM,VirtualConsole}=require('../../web/tests/node_modules/jsdom');
+const project=path.resolve(__dirname,'../..'),origin='http://127.0.0.1:8777',calls=[],errors=[],pending=new Set();
+const vc=new VirtualConsole();vc.on('jsdomError',e=>errors.push(e.stack));
+const dom=new JSDOM(fs.readFileSync(path.join(project,'web/index.html'),'utf8'),{url:origin+'/app#calendar',runScripts:'outside-only',virtualConsole:vc});const w=dom.window,$=s=>w.document.querySelector(s);
+w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new w.Event('close'));};
+w.fetch=(relative,options={})=>{const url=new URL(relative,origin);assert.equal(url.origin,origin);assert.ok(!url.pathname.startsWith('/sync'));const job=fetch(url,options).then(response=>{calls.push({path:url.pathname,method:options.method||'GET',status:response.status});return response;}).finally(()=>pending.delete(job));pending.add(job);return job;};
+async function settle(){for(let n=0;n<500;n++){await new Promise(r=>setTimeout(r,25));if(!pending.size&&$('#refresh').textContent!=='Caricamento…'){await new Promise(r=>setTimeout(r,50));if(!pending.size)break;}if(n===499)throw Error('UI busy');}assert.deepEqual(errors,[]);assert.ok(!$('#notice').classList.contains('error'),$('#notice').textContent);}
+async function api(route,method='GET',body){const response=await fetch(origin+route,{method,headers:{'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});const value=await response.json();assert.ok(response.ok,JSON.stringify({route,status:response.status,value}));return value;}
+(async()=>{try{
+ for(const name of ['metric-status.js','charts.js','app.js','usability.js','progress.js','wellness.js','manual-training.js','plan-coach.js'])w.eval(fs.readFileSync(path.join(project,'web',name),'utf8'));await settle();
+ const before=await api('/planning/profile'),today=$('#plan-coach-form [name=start]').value,year=Number(today.slice(0,4)),tomorrow=new Date(today+'T12:00:00Z');tomorrow.setUTCDate(tomorrow.getUTCDate()+1);
+ $('#plan-coach details').open=true;const form=$('#plan-coach-form');form.elements.message.value='non voglio fare nuoto fino a gennaio';form.elements.message.dispatchEvent(new w.Event('input',{bubbles:true}));form.dispatchEvent(new w.Event('submit',{cancelable:true,bubbles:true}));await settle();
+ assert.equal(form.elements.end.value,`${year}-12-31`);assert.match($('.coach-date-assumption').textContent,new RegExp(`${year+1}-01-01`));assert.match($('.coach-removal-summary').textContent,/1 seduta/);assert.match($('.coach-conversation').textContent,/QA Nuoto/);assert.doesNotMatch($('.coach-conversation').textContent,/QA Bici|QA Corsa|QA Nuoto passato/);
+ assert.equal((await api('/planning/profile')).profile.time_constraints.length,0);assert.ok((await api('/coach/workouts')).some(row=>row.name==='QA Nuoto'));
+ $('.coach-conversation button').click();await settle();const current=await api('/planning/profile');assert.deepEqual(current.profile.time_constraints[0].sports,['swimming']);assert.deepEqual(current.profile.excluded_sports,before.profile.excluded_sports);assert.equal(current.profile.pool_access,before.profile.pool_access);
+ const workouts=await api('/coach/workouts');assert.ok(!workouts.some(row=>row.name==='QA Nuoto'));assert.ok(workouts.some(row=>row.name==='QA Nuoto passato'&&row.status==='completed'));for(const name of ['QA Bici','QA Corsa'])assert.ok(workouts.some(row=>row.name===name&&row.duration_min===20&&row.status==='planned'));
+ const coach=await api('/coach/today');assert.ok(!coach.allowed_sports.includes('swimming'));assert.ok(coach.allowed_sports.includes('cycling'));
+ const paused=await api('/planning/week','POST',{start:tomorrow.toISOString().slice(0,10),regenerate:true});assert.ok(!paused.days.flatMap(day=>day.sessions).some(row=>row.sport==='swimming'));
+ const resumed=await api('/planning/week','POST',{start:`${year+1}-01-08`,regenerate:true});assert.ok(resumed.days.flatMap(day=>day.sessions).some(row=>row.sport==='swimming'));
+ $('.coach-time-rule button').click();await settle();assert.equal((await api('/planning/profile')).profile.time_constraints.length,0);
+ assert.equal((await api('/activities')).length,0);assert.equal(calls.filter(c=>c.status>=400).length,0);
+ const result={passed:true,frontend_requests:calls.length,dom_errors:errors.length,http_errors:calls.filter(c=>c.status>=400).length,exact_user_phrase:true,inferred_resume:`${year+1}-01-01`,preview_readonly:true,only_future_swim_removed:true,other_disciplines_preserved:true,automatic_generation_respects_pause:true,swimming_resumes_after_expiry:true,rule_removable:true,activities_created:0};fs.writeFileSync(path.join(__dirname,'result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result));
+}finally{dom.window.close();}})().catch(e=>{console.error(e.stack);process.exitCode=1;});

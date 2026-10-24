@@ -237,7 +237,7 @@ def test_canonical_intervals_observation_null_overrides_stale_load(api):
     assert body['coverage']['current']['load']['percent'] == 66.7
 
 
-@pytest.mark.parametrize('raw', ['not-json', '[1,2]', '{"load":true}', '{"load":-10}', '{"load":"NaN"}'])
+@pytest.mark.parametrize('raw', ['not-json', '[1,2]', '{"load":true}', '{"load":-10}', '{"load":"NaN"}', '[' * 2000 + '0' + ']' * 2000])
 def test_invalid_authoritative_load_remains_unknown(api, raw):
     client, engine = api
     with Session(engine) as db:
@@ -347,7 +347,24 @@ def test_endpoint_is_read_only_and_database_queries_are_bounded(api):
         event.remove(engine, 'before_cursor_execute', capture)
     assert len(statements) == 2
     assert all(statement.lstrip().upper().startswith('SELECT') for statement in statements)
-    assert all('activities.start_time >=' in statement and 'activities.start_time <' in statement for statement in statements)
+    assert 'activities.start_time >=' in statements[0] and 'activities.start_time <' in statements[0]
+    # The shared resolver receives only the IDs returned by the bounded time
+    # query; it must not scan observations belonging to the rest of history.
+    assert 'activity_observations.activity_id IN' in statements[1]
+
+
+@pytest.mark.parametrize('canonical_source, expected_load, expected_known', [('intervals',40,1),('fit',None,0)])
+def test_alias_loads_use_the_same_identity_policy_as_diary_and_profile(api,canonical_source,expected_load,expected_known):
+    client,engine=api
+    with Session(engine) as db:
+        row=activity(db,'retained',source=canonical_source,load=99)
+        db.add_all([
+            ActivityObservation(activity_id=row.id,source_key='intervals:retained',payload_json='{"load":40}'),
+            ActivityObservation(activity_id=row.id,source_key='intervals:merged-alias',payload_json='{"load":900}')])
+        db.commit()
+    body=response(client)
+    assert body['volume']['current']['load']==expected_load
+    assert body['coverage']['current']['load']['known']==expected_known
 
 
 def test_hosted_route_uses_authenticated_workspace_without_global_activity_leak(tmp_path, monkeypatch):

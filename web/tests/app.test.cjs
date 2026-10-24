@@ -101,7 +101,7 @@ async function setup(t) {
     else if (pathname === '/experience/race-preparation') { if (method === 'PUT') data.race = clone(payload); result = data.race; }
     else if (method === 'GET' && pathname === '/workouts/71/garmin/status') result = { status: 'blocked', message: 'Accesso Garmin ufficiale non configurato.' };
     else if (method === 'POST' && pathname === '/workouts/71/garmin/send') result = { status: 'blocked', message: 'Nessun invio eseguito: accesso Garmin ufficiale richiesto.' };
-    else if (method === 'GET' && pathname === '/experience/workouts/71/review') result = { feedback: data.feedback, suggested_match: { activity_id: 91, confidence: 85 } };
+    else if (method === 'GET' && pathname === '/experience/workouts/71/review') result = {workout:data.workout, feedback: data.feedback, suggested_match: { activity_id: 91, confidence: 85 }, activity_candidates:{window:{start:'2026-10-14',end:'2026-10-20',timezone:'Europe/Rome'},items:[{...data.activities[0],activity_date:'2026-10-17',duration_min:55,day_delta:0,duration_delta_min:-5,available:true,match_token:'a'.repeat(64)}],counts:{eligible:1,returned:1,total:1,truncated:false},limits:[]}};
     else if (method === 'PUT' && pathname === '/experience/workouts/71/feedback') { data.feedback = { ...payload, planned_duration_min: 60, actual: { duration_min: payload.activity_id ? 55 : 60 * payload.completion_percent / 100 }, evaluation: { completion: payload.activity_id ? 92 : payload.completion_percent }, source: payload.activity_id ? 'activity' : 'manual' }; result = data.feedback; }
     else if (method === 'POST' && pathname === '/coach/workouts') result = { ...data.plan, sport: payload.sport };
     else throw new Error(`Unstubbed fixture request: ${method} ${pathname}`);
@@ -111,7 +111,7 @@ async function setup(t) {
   const flush = async () => { for (let i = 0; i < 12; i++) await new Promise(resolve => setImmediate(resolve)); assert.equal(errors.length, 0, errors.map(e => e.stack || e.message).join('\n')); };
   const submit = async selector => { $(selector).dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true })); await flush(); };
   const set = (selector, value) => { const input = $(selector); assert.ok(input, `Missing control ${selector}`); if (input.type === 'checkbox') input.checked = value; else input.value = value; input.dispatchEvent(new w.Event('input', { bubbles: true })); };
-  w.eval(fs.readFileSync(path.join(__dirname,'../charts.js'),'utf8')); w.eval(colorsScript); w.eval(script); await flush();
+  w.eval(fs.readFileSync(path.join(__dirname,'../charts.js'),'utf8')); w.eval(colorsScript); w.eval(script); w.eval(fs.readFileSync(path.join(__dirname,'../workout-matching.js'),'utf8')); await flush();
   assert.ok(!$('#notice').classList.contains('error'), $('#notice').textContent);
   return { w, $, data, calls, flush, submit, set, advance: ms => { now += ms; intervals.forEach(callback => callback()); } };
 }
@@ -334,6 +334,16 @@ test('calendar navigation, generation and undo preserve the app contract', async
   $('#week-next').click(); await flush(); assert.ok(calls.some(c => c.path === '/planning/week?start=2026-10-19'));
 });
 
+test('calendar badges use execution evidence without enabling edits to raw completed sessions',async t=>{
+  const {w,$,data,flush}=await setup(t);
+  data.generated=true;data.workout.status='completed';data.workout.execution_status='unconfirmed';data.workout.evidence_issue='Il feedback precedente non è leggibile.';
+  $('#refresh').click();await flush();w.IronCoachUI.navigate('calendar');await flush();
+  assert.match($('#week-days .calendar-session .badge').textContent,/Da confermare/);
+  assert.match($('#week-days .calendar-session').textContent,/feedback precedente non è leggibile/);
+  assert.equal([...$('#week-days').querySelectorAll('button')].some(button=>button.textContent==='Sposta / accorcia / salta'),false);
+  data.workout.execution_status='modified';$('#refresh').click();await flush();assert.match($('#week-days .calendar-session .badge').textContent,/Esecuzione modificata/);
+});
+
 test('athlete form submits availability and retains independent threshold provenance', async t => {
   const { $, calls, set, submit } = await setup(t);
   set('#athlete-form [name="experience"]', 'advanced');
@@ -379,11 +389,13 @@ test('saved workout exposes export, reports blocked Garmin truthfully and saves 
   $('#workouts button').click(); await flush();
   assert.equal($('#feedback-form').hidden, false); assert.equal($('#export-workout').hidden, false); assert.equal($('#export-workout').getAttribute('href'), '/workouts/71/export.json');
   assert.match($('#garmin-workout-status').textContent, /non configurato/);
+  assert.equal($('#feedback-activity').value, '', 'A proposal must never be selected automatically');
+  $('#workout-matching [data-match-activity="91"] button').click();
   assert.equal($('#feedback-activity').value, '91');
   $('#send-garmin').click(); await flush(); assert.match($('#garmin-workout-status').textContent, /Nessun invio eseguito/); assert.equal($('#notice').classList.contains('error'), true);
   set('#feedback-form [name="rpe"]', '6'); set('#feedback-form [name="completion_percent"]', '90'); set('#feedback-form [name="feeling"]', 'harder'); set('#feedback-form [name="notes"]', '  Gambe pesanti  ');
   await submit('#feedback-form');
-  assert.deepEqual(calls.find(c => c.method === 'PUT' && c.path.endsWith('/feedback')).payload, { rpe: 6, completion_percent: 90, feeling: 'harder', notes: 'Gambe pesanti', activity_id: 91 });
+  assert.deepEqual(calls.find(c => c.method === 'PUT' && c.path.endsWith('/feedback')).payload, { rpe: 6, completion_percent: 90, feeling: 'harder', notes: 'Gambe pesanti', activity_id: 91, activity_match_token:'a'.repeat(64) });
   assert.match($('#feedback-result').textContent, /60 \/ 55 minuti/);
   assert.match($('#feedback-result').textContent, /misurata/);
 });
@@ -784,6 +796,49 @@ test('health cards open charts with their own four-week range and preserve custo
  assert.equal($('#metric-detail .chart-range [name="to"]').value,'2026-10-17');assert.ok($('#metric-detail svg .axis-label'));
  set('#metric-detail .chart-range [name="from"]','2026-09-01');set('#metric-detail .chart-range [name="to"]','2026-10-01');await submit('#metric-detail .chart-range');
  assert.equal($('#metric-detail .chart-range [name="from"]').value,'2026-09-01');assert.equal($('#metric-detail .chart-range [name="to"]').value,'2026-10-01');
+});
+
+test('opening a health chart retains the period selected on the health page',async t=>{
+ const {w,$,set,submit,flush}=await setup(t),original=w.fetch;
+ w.fetch=async(url,options)=>{const response=await original(url,options);if(!String(url).startsWith('/health/metrics?'))return response;const value=await response.json(),params=new URL(url,'https://fixture.invalid').searchParams;return {ok:true,json:async()=>({...value,from:params.get('from'),to:params.get('to')})};};
+ set('#health-range [name="from"]','2026-09-01');set('#health-range [name="to"]','2026-09-30');await submit('#health-range');
+ $('#health-metrics .metric-open').click();await flush();
+ assert.equal($('#metric-detail [name="from"]').value,'2026-09-01');assert.equal($('#metric-detail [name="to"]').value,'2026-09-30');
+ assert.match($('#metric-detail .health-series-summary').textContent,/0 \/ 30/);assert.match($('#metric-detail .health-series-data').textContent,/Nessuna misura disponibile/);
+ assert.equal($('#metric-detail svg'),null,'Measurements outside the selected period are not drawn.');
+});
+
+test('health charts expose dated source values and distinguish missing days from a recorded zero',async t=>{
+ const {w,$,flush}=await setup(t),original=w.fetch;
+ const points=[{date:'2026-10-10',value:7,source:'manual'},{date:'2026-10-11',value:6.5,source:'intervals'},{date:'2026-10-12',value:null,source:'intervals'},{date:'2026-10-14',value:0,source:'intervals'},{date:'2026-10-16',value:8,source:'intervals'},{date:'2026-10-17',value:9,source:'intervals'}];
+ w.fetch=async(url,options)=>{const response=await original(url,options);if(!String(url).startsWith('/health/metrics'))return response;return {ok:true,json:async()=>({from:'2026-10-10',to:'2026-10-16',metrics:[{kind:'sleep_hours',label:'Sonno',unit:'ore',latest:points[4],points,stale:false}]})};};
+ $('#refresh').click();await flush();$('#health-metrics .metric-open').click();await flush();
+ assert.match($('#metric-detail .health-series-summary').textContent,/Ultima misura8 ore/);assert.match($('#metric-detail .health-series-summary').textContent,/4 \/ 7/);
+ const rows=[...$('#metric-detail .health-series-data tbody').rows];assert.equal(rows.length,4);
+ assert.match(rows[0].textContent,/10\/10\/2026.*7.*Inserimento manuale/);assert.match(rows[2].textContent,/14\/10\/2026.*0.*Intervals.icu/);
+ assert.equal($('#metric-detail svg').querySelectorAll('circle').length,4);assert.equal($('#metric-detail svg').querySelectorAll('line[stroke="#2a6079"]').length,1,'Missing days must break the line.');
+ assert.match($('#metric-detail .health-series-data').textContent,/Un giorno assente non vale zero/);
+ const columns=[...$('#metric-detail .health-series-data thead').querySelectorAll('th')];assert.ok(columns.every(column=>column.scope==='col'));
+});
+
+test('recovery detail distinguishes the three-reading median from the last measurement and clears it on a different range',async t=>{
+ const {w,$,set,submit}=await setup(t);
+ const points=[{date:'2026-10-14',value:45,source:'intervals'},{date:'2026-10-15',value:48,source:'intervals'},{date:'2026-10-16',value:62,source:'intervals'}];
+ w.IronCoachUI.openHealthMetric({kind:'hrv_ms',label:'HRV',unit:'ms',latest:points[2],points,recovery_trend:{current:48,baseline:50,counts:{baseline:8,recent:3},recent_dates:points.map(p=>p.date),source:'intervals',stale:false,explanation:'Confronto tra letture della stessa fonte.'}});
+ const summary=$('#metric-detail .health-series-summary');assert.match(summary.textContent,/Mediana delle ultime 3 letture48 ms/);assert.match(summary.textContent,/Ultima misura62 ms/);assert.match(summary.textContent,/8 letture precedenti.*Intervals.icu/);
+ set('#metric-detail [name="from"]','2026-09-01');set('#metric-detail [name="to"]','2026-09-10');await submit('#metric-detail .chart-range');
+ assert.doesNotMatch($('#metric-detail .health-series-summary').textContent,/Mediana delle ultime 3 letture|48 ms/);assert.match($('#metric-detail .health-series-summary').textContent,/0 \/ 10/);
+});
+
+test('recovery chart judgment uses the displayed aggregate instead of borrowing a different Home reference',async t=>{
+ const {w,$,flush}=await setup(t),original=w.fetch,latest={value:52,date:'2026-10-17',source:'intervals'};
+ w.fetch=async(url,options)=>{const response=await original(url,options);if(!String(url).startsWith('/dashboard/home'))return response;const value=await response.json();value.condition=[{kind:'hrv_ms',latest}];value.metric_assessments={hrv_ms:{explanation:'HOME_ONLY reference 45.2–83.2',evidence:['HOME_ONLY evidence'],actions:['HOME_ONLY action']}};return {ok:true,json:async()=>value};};
+ $('#refresh').click();await flush();
+ const metric={kind:'hrv_ms',label:'HRV',unit:'ms',latest,points:[latest],baseline:68,reference_range:{lower:41.3,upper:95.3,count:28},current:52,counts:{recent:3,baseline:28},source:'intervals',stale:false};
+ metric.recovery_trend={current:52,baseline:68,counts:metric.counts,source:'intervals',stale:false,explanation:'Mediana recente 52 ms; riferimento personale 68 ms, stessa fonte.'};
+ w.IronCoachUI.openHealthMetric(metric);
+ assert.match($('#metric-detail .health-coach-detail').textContent,/Confronto tra mediane.*Segnale sfavorevole/);assert.match($('#metric-detail .health-coach-detail').textContent,/Mediana recente 52 ms.*riferimento personale 68 ms/);
+ assert.doesNotMatch($('#metric-detail .health-coach-detail').textContent,/HOME_ONLY|45.2/);assert.match($('#metric-detail .chart-panel').textContent,/41,3–95,3/);
 });
 
 test('Coach navigation offers a back arrow to the originating section',async t=>{

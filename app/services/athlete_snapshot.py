@@ -9,7 +9,8 @@ from app.db.models import Activity
 from app.services.athlete_clock import activity_day, athlete_today, day_start_utc, utc_now_naive
 from app.services.goal_planning import goal_context
 from app.services.health import effective_metrics, health_response
-from app.services.health_reports import active_restrictions, _known_loads
+from app.services.health_reports import active_restrictions
+from app.services.observed_load import resolve_observed_loads
 from app.services.planning import load_settings
 from app.services.training_load import sport_key
 
@@ -26,41 +27,128 @@ RECORD_FIELDS = {
 
 
 def _number(value):
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value >= 0
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return None
+    try:
+        value = float(value)
+    except (OverflowError, ValueError):
+        return None
+    return value if math.isfinite(value) and value >= 0 else None
+
+
+def _scaled(value, scale=1):
+    value = _number(value)
+    if value is None:
+        return None
+    result = value * scale
+    return result if math.isfinite(result) else None
+
+
+def _coverage(values, scale=1, unit=''):
+    """Keep complete totals separate from the subtotal of available values."""
+    values = list(values)
+    known = [number for value in values if (number := _scaled(value, scale)) is not None]
+    missing = sum(value is None for value in values)
+    try:
+        subtotal = math.fsum(known) if known or not values else None
+    except OverflowError:
+        subtotal = None
+    if subtotal is not None and not math.isfinite(subtotal):
+        subtotal = None
+    complete = len(known) == len(values) and subtotal is not None
+    status = ('empty' if not values else 'complete' if complete else
+              'partial' if known and subtotal is not None else 'unavailable')
+    result = {'known': len(known), 'expected': len(values), 'missing': missing,
+              'invalid': len(values) - missing - len(known), 'complete': complete,
+              'status': status, 'known_value': round(subtotal, 2) if subtotal is not None else None,
+              'unit': unit}
+    if known and subtotal is None:
+        result['reason'] = 'aggregate_overflow'
+    return result
+
+
+def _complete_value(coverage):
+    return coverage['known_value'] if coverage['complete'] else None
+
+
+def _duration_coverage(rows):
+    result = _coverage((row.duration_seconds for row in rows), 1 / 60, 'min')
+    return {**result, 'known_minutes': result['known_value']}
+
+
+def _weekly(value):
+    return round(value / 4, 1) if value is not None else None
 
 
 def _records(rows):
     result = {}
     for key, (attribute, scale, unit, label) in RECORD_FIELDS.items():
-        candidates = [row for row in rows if _number(getattr(row, attribute)) and
-                      (getattr(row, attribute) > 0 or attribute == 'elevation_gain_meters')]
+        coverage = _coverage((getattr(row, attribute) for row in rows), scale, unit)
+        candidates = [(row, value) for row in rows
+                      if (value := _scaled(getattr(row, attribute), scale)) is not None and
+                      (value > 0 or attribute == 'elevation_gain_meters')]
         if not candidates:
             result[key] = None
             continue
-        row = max(candidates, key=lambda item: (getattr(item, attribute), item.start_time, item.id))
-        result[key] = {'value': round(getattr(row, attribute) * scale, 2), 'unit': unit, 'label': label,
+        row, value = max(candidates, key=lambda item: (item[1], item[0].start_time, item[0].id))
+        result[key] = {'value': round(value, 2), 'unit': unit, 'label': label,
                        'activity_id': row.id, 'activity_name': row.name or label, 'date': str(activity_day(row.start_time)),
-                       'source': row.source, 'scope': 'whole_activity'}
+                       'source': row.source, 'scope': 'whole_activity',
+                       'candidate_coverage': {key: coverage[key] for key in ('known', 'expected', 'missing', 'invalid')} |
+                                             {'eligible': len(candidates)}}
     return result
 
 
-def _totals(db, rows):
-    def observed(attribute, scale=1):
-        values = [getattr(row, attribute) for row in rows if _number(getattr(row, attribute))]
-        return round(sum(values) * scale, 2) if values or not rows else None
-    loads = _known_loads(db, rows)
-    return {'activities': len(rows), 'hours': observed('duration_seconds', 1/3600),
-            'distance_km': observed('distance_meters', .001), 'elevation_m': observed('elevation_gain_meters'),
-            'calories': observed('calories'), 'load': round(sum(value for _, value in loads), 1) if loads or not rows else None,
-            'coverage': {attribute: sum(_number(getattr(row, attribute)) for row in rows)
-                         for attribute in ('duration_seconds', 'distance_meters', 'elevation_gain_meters', 'calories')}}
+def _totals(rows, loads):
+    fields = {'hours': ('duration_seconds', 1 / 3600, 'ore'),
+              'distance_km': ('distance_meters', .001, 'km'),
+              'elevation_m': ('elevation_gain_meters', 1, 'm'), 'calories': ('calories', 1, 'kcal')}
+    coverage = {key: _coverage((getattr(row, attribute) for row in rows), scale, unit)
+                for key, (attribute, scale, unit) in fields.items()}
+    coverage['load'] = _coverage((loads[row.id]['value'] for row in rows), unit='punti')
+    coverage['load']['conflicting'] = sum(loads[row.id]['status'] == 'conflict' for row in rows)
+    coverage['load']['missing'] = sum(loads[row.id]['status'] == 'missing' for row in rows)
+    coverage['load']['invalid'] = sum(loads[row.id]['status'] in ('invalid', 'conflict') for row in rows)
+    return {'activities': len(rows), **{key: _complete_value(value) for key, value in coverage.items()},
+            'coverage': {attribute: sum(_number(getattr(row, attribute)) is not None for row in rows)
+                         for attribute in ('duration_seconds', 'distance_meters', 'elevation_gain_meters', 'calories')},
+            'coverage_summary': coverage}
 
 
 def _sport(value):
     key = sport_key(value)
-    if key in ('gym', 'weightlifting', 'workout'):
-        return 'strength'
     return key if key in LABELS else 'other'
+
+
+def _volume_comparison(day, start, previous_start, current, previous):
+    reasons = []
+    for label, coverage in [('current', current), ('previous', previous)]:
+        if not coverage['complete']:
+            reasons.append(label + '_duration_incomplete')
+    status = 'insufficient_data' if reasons else 'available'
+    current_minutes, previous_minutes = _complete_value(current), _complete_value(previous)
+    change = delta = None
+    if not reasons:
+        if previous_minutes <= 0:
+            status = 'no_baseline'; reasons.append('previous_volume_zero')
+        else:
+            change = (current_minutes / previous_minutes - 1) * 100
+            delta = current_minutes - previous_minutes
+            if not math.isfinite(change) or not math.isfinite(delta):
+                change = delta = None
+                status = 'insufficient_data'; reasons.append('comparison_overflow')
+    def window(first, last, coverage):
+        return {'start': str(first), 'end': str(last), 'days': 28,
+                'total_minutes': _complete_value(coverage), 'known_minutes': coverage['known_minutes'],
+                'known_activities': coverage['known'], 'expected_activities': coverage['expected'],
+                'complete': coverage['complete'], 'coverage_status': coverage['status']}
+    return {'scope': 'registered_activity_duration', 'status': status, 'reasons': reasons,
+            'current': window(start, day, current),
+            'previous': window(previous_start, start - timedelta(days=1), previous),
+            'known_activity_counts': {'current': current['known'], 'previous': previous['known']},
+            'expected_activity_counts': {'current': current['expected'], 'previous': previous['expected']},
+            'change_pct': round(change, 1) if change is not None else None,
+            'delta_minutes': round(delta, 2) if delta is not None else None}
 
 
 def derived_profile(db, day=None):
@@ -81,23 +169,32 @@ def derived_profile(db, day=None):
     weight = {**weight, 'change_28d_kg': round(weight_recent[-1]['value'] - weight_recent[0]['value'], 2) if len(weight_recent) >= 2 else None}
     from app.services.body_metrics import body_mass_index
     body_mass = body_mass_index(settings, weight, day)
-    # Aggregate observed load only; never estimate from a default FTP.
-    known_loads = _known_loads(db, recent)
-    recent_minutes = sum(max(0, row.duration_seconds or 0) / 60 for row in recent)
-    previous_minutes = sum(max(0, row.duration_seconds or 0) / 60 for row in previous)
+    # Resolve provenance once, then reuse it for every window and discipline.
+    # Missing fields remain unknown; available subtotals carry explicit coverage.
+    loads = resolve_observed_loads(db, activities)
+    duration_coverage = _duration_coverage(recent)
+    previous_duration_coverage = _duration_coverage(previous)
+    recent_minutes = _complete_value(duration_coverage)
+    previous_minutes = _complete_value(previous_duration_coverage)
+    volume_comparison = _volume_comparison(day, start, previous_start, duration_coverage, previous_duration_coverage)
+    totals = {'all_time': _totals(activities, loads), 'days_90': _totals(ninety, loads),
+              'days_28': _totals(recent, loads)}
     frequency = Counter(_sport(row.sport) for row in recent)
     sports = []
     for key, label in LABELS.items():
         rows = [row for row in recent if _sport(row.sport) == key]
         all_rows = [row for row in activities if _sport(row.sport) == key]
         long_rows = [row for row in ninety if _sport(row.sport) == key]
-        duration = [row.duration_seconds / 60 for row in rows if row.duration_seconds is not None and row.duration_seconds >= 0]
-        distance = [row.distance_meters / 1000 for row in rows if row.distance_meters is not None and row.distance_meters >= 0]
+        duration = _duration_coverage(rows)
+        distance = _coverage((row.distance_meters for row in rows), .001, 'km')
+        records = {'all_time': _records(all_rows), 'days_90': _records(long_rows), 'days_28': _records(rows)}
+        longest = records['days_90']['longest_duration_min']
         sports.append({'sport': key, 'label': label, 'activities': len(rows), 'weekly_sessions': round(len(rows) / 4, 1),
-                       'minutes': round(sum(duration), 1), 'weekly_minutes': round(sum(duration) / 4, 1),
-                       'distance_km': round(sum(distance), 1), 'longest_90d_min': round(max((row.duration_seconds / 60 for row in long_rows if row.duration_seconds is not None and row.duration_seconds >= 0), default=0), 1),
-                       'totals': {'all_time': _totals(db, all_rows), 'days_90': _totals(db, long_rows), 'days_28': _totals(db, rows)},
-                       'records': {'all_time': _records(all_rows), 'days_90': _records(long_rows)}})
+                       'minutes': _complete_value(duration), 'weekly_minutes': _weekly(_complete_value(duration)),
+                       'duration_coverage': duration, 'distance_coverage': distance,
+                       'distance_km': _complete_value(distance), 'longest_90d_min': longest['value'] if longest else None,
+                       'totals': {'all_time': _totals(all_rows, loads), 'days_90': _totals(long_rows, loads),
+                                  'days_28': _totals(rows, loads)}, 'records': records})
     active_weeks = len({(activity_day(row.start_time).isocalendar().year, activity_day(row.start_time).isocalendar().week) for row in recent})
     strengths = []
     priorities = []
@@ -114,7 +211,7 @@ def derived_profile(db, day=None):
             key = names[discipline]
             if not frequency.get(key):
                 priorities.append(f"{LABELS[key]} richiesta da {goal['name']}, ma assente nelle ultime quattro settimane: ricostruisci continuità nel piano.")
-    if previous_minutes > 0 and recent_minutes < previous_minutes * .7:
+    if volume_comparison['status'] == 'available' and volume_comparison['change_pct'] < -30:
         priorities.append('Il volume registrato è diminuito di oltre il 30% rispetto alle quattro settimane precedenti: verifica se lo scarico era programmato.')
     restrictions = active_restrictions(db, day)
     priorities[:0] = restrictions['reasons']
@@ -128,12 +225,14 @@ def derived_profile(db, day=None):
     return {'date': str(day), 'generated_at': utc_now_naive().isoformat() + 'Z', 'name': settings['name'] or None,
             'window': {'start': str(start), 'end': str(day), 'days': 28}, 'headline': headline,
             'activities': len(recent), 'total_activities': count, 'history_days': historical_days,
-            'weekly_minutes': round(recent_minutes / 4, 1), 'previous_weekly_minutes': round(previous_minutes / 4, 1),
-            'weekly_load': round(sum(value for _, value in known_loads) / 4, 1) if known_loads else None,
+            'weekly_minutes': _weekly(recent_minutes), 'previous_weekly_minutes': _weekly(previous_minutes),
+            'duration_coverage': duration_coverage, 'previous_duration_coverage': previous_duration_coverage,
+            'volume_comparison': volume_comparison,
+            'weekly_load': _weekly(totals['days_28']['load']),
             'fitness': {key: round(current_metrics[key], 1) for key in ('ctl', 'atl', 'tsb', 'sleep_hours', 'hrv_ms', 'resting_hr_bpm') if current_metrics.get(key) is not None},
             'health': {'from': str(health_start), 'to': str(day), 'metrics': [item for item in observed_health['metrics'] if item['latest']], 'weight': weight},
             'body_mass': body_mass, 'personal_details': {'height_cm': settings['height_cm'], 'birth_date': settings['birth_date'], 'sex': settings['sex']},
-            'totals': {'all_time': _totals(db, activities), 'days_90': _totals(db, ninety), 'days_28': _totals(db, recent)},
+            'totals': totals,
             'records_note': 'Record calcolati sulle attività intere registrate. Potenza e velocità medie non sono record su segmenti, curve di potenza o soglie FTP.',
             'sports': sports, 'goal': goal, 'strengths': strengths, 'priorities': priorities,
             'restrictions': restrictions, 'thresholds': thresholds, 'goal_warnings': goal_warnings,

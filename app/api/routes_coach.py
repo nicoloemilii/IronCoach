@@ -239,6 +239,8 @@ def _reviewable_workout(db: Session, workout_id: int):
 @router.post('/coach/workouts/{workout_id}/evaluate')
 def evaluate(workout_id: int, payload: LegacyEvaluationInput, db: Session = Depends(get_db)):
     try:
+        from app.api.routes_experience import begin_feedback_write
+        begin_feedback_write(db)
         return _evaluate_feedback(workout_id, payload, db)
     except Exception:
         db.rollback()
@@ -250,7 +252,12 @@ def _evaluate_feedback(workout_id: int, payload: LegacyEvaluationInput, db: Sess
     from app.db.experience_models import SessionFeedback
 
     row = _reviewable_workout(db, workout_id)
-    planned = json.loads(row.payload_json)
+    from app.services.execution_evidence import safe_object
+    planned = safe_object(row.payload_json)
+    if planned is None:
+        raise HTTPException(409, 'Il programma contiene dati non leggibili. Verifica la seduta.')
+    if payload.steps is not None and not isinstance(planned.get('steps',[]),list):
+        raise HTTPException(409, 'Le fasi del programma non sono leggibili. Verifica la seduta.')
     if payload.steps is not None and len(payload.steps) != len(planned.get('steps', [])):
         raise HTTPException(422, 'I dati per fase richiedono una voce per ogni fase programmata, anche vuota se non misurata.')
     duration = payload.duration_min
@@ -279,7 +286,7 @@ def _evaluate_feedback(workout_id: int, payload: LegacyEvaluationInput, db: Sess
         if 'steps' in provided:
             actual['steps'] = provided['steps']
     result = evaluate_workout(planned, actual)
-    if payload.feeling == 'harder' or payload.rpe >= 8 or result['completion'] < 70:
+    if payload.feeling == 'harder' or payload.rpe >= 8 or (result['completion'] is not None and result['completion'] < 70):
         result['adaptation'] = 'reduce_next_similar'
     result['evidence_source'] = 'self_reported_step_data' if payload.steps is not None else content['source']
     result['intensity_comparison'] = 'self_reported_step_data' if result['intensity_control'] is not None else 'unavailable_without_step_data'

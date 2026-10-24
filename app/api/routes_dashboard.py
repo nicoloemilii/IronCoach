@@ -1,50 +1,38 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from types import SimpleNamespace
 
 from app.db.database import get_db
 from app.db.models import Activity
 from app.services.analysis import training_summary
-from app.services.training_load import activity_load, fitness_metrics, fitness_metrics_by_sport, data_quality
-from app.services.activity_rating import activity_ratings, recorded_loads
+from app.services.training_load import fitness_metrics, fitness_metrics_by_sport, data_quality, sport_key
+from app.services.activity_rating import activity_ratings
+from app.services.observed_load import resolve_observed_loads, load_values
+from app.services.activity_diary import diary_page, serialize_activity
 
 router = APIRouter()
 
 
-def _serialize(activity: Activity, ftp_watts: float, rating=None, load=None):
-    return {
-        "id": activity.id,
-        "source": activity.source,
-        "sport": activity.sport,
-        "name": activity.name,
-        "start_time": activity.start_time,
-        "duration_seconds": activity.duration_seconds,
-        "distance_meters": activity.distance_meters,
-        "elevation_gain_meters": activity.elevation_gain_meters,
-        "avg_hr": activity.avg_hr,
-        "max_hr": activity.max_hr,
-        "avg_power": activity.avg_power,
-        "normalized_power": activity.normalized_power,
-        "avg_speed": activity.avg_speed,
-        "avg_cadence": activity.avg_cadence,
-        "calories": activity.calories,
-        # An unmapped view avoids a separate observation query for every row.
-        "load": activity_load(SimpleNamespace(sport=activity.sport, source=activity.source,
-                              duration_seconds=activity.duration_seconds, normalized_power=activity.normalized_power,
-                              load=load), ftp_watts),
-        "coach_rating": rating,
-    }
+def _serialize(activity: Activity, ftp_watts: float, rating=None, load=None, load_evidence=None):
+    return serialize_activity(activity,rating,load,load_evidence)
+
+
+@router.get('/activities/diary')
+def get_activity_diary(limit: int = Query(50,ge=1,le=100), sport: str | None = None,
+                       q: str = Query('',max_length=200), cursor: str | None = Query(None,max_length=2048),
+                       db: Session = Depends(get_db)):
+    return diary_page(db,limit=limit,sport=sport,q=q,cursor=cursor)
 
 
 @router.get("/activities")
 def get_activities(
-    ftp_watts: float = Query(170.0, gt=0, allow_inf_nan=False, description="FTP ciclismo in watt usato per il calcolo TSS"),
+    ftp_watts: float = Query(170.0, gt=0, allow_inf_nan=False, description="Parametro di compatibilità; il diario espone soltanto il carico registrato"),
     db: Session = Depends(get_db),
 ):
     activities = db.query(Activity).order_by(Activity.start_time.desc()).all()
-    loads = recorded_loads(db, activities)
+    resolved = resolve_observed_loads(db, activities)
+    loads = load_values(resolved)
     ratings = activity_ratings(db, activities, loads=loads)
-    return [_serialize(activity, ftp_watts, ratings[activity.id], loads[activity.id]) for activity in activities]
+    return [_serialize(activity, ftp_watts, ratings[activity.id], loads[activity.id], resolved[activity.id]) for activity in activities]
 
 
 @router.get("/analysis/summary")

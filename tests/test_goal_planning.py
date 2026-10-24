@@ -192,8 +192,11 @@ def test_preview_has_no_writes_matches_actual_change_and_undo(setup, action):
     assert preview.status_code == 200, preview.text
     assert writes == commits == [] and not db.dirty
     predicted = preview.json()
-    assert predicted['before'] == row
-    assert planning.serialize_workout(db.get(Workout, row['id'])) == row
+    # The calendar adds read-only execution evidence. Mutation snapshots still
+    # contain every original ledger field and never persist those derived values.
+    ledger = {key: row[key] for key in ('id', 'date', 'sport', 'name', 'duration_min', 'status', 'payload')}
+    assert predicted['before'] == ledger
+    assert planning.serialize_workout(db.get(Workout, row['id'])) == ledger
     assert db.query(PlanRevision).count() == 1
     actual = client.patch(f"/planning/workouts/{row['id']}", json=body)
     assert actual.status_code == 200, actual.text

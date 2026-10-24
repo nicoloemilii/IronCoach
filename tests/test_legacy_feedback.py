@@ -20,11 +20,18 @@ from app.services import athlete_clock
 
 
 @pytest.fixture
-def legacy_api():
+def legacy_api(monkeypatch):
+    # Keep recorded sessions in the past even when the suite runs before
+    # 06:00 UTC. Forwarders retain the explicit local-midnight test override.
+    from app.api import routes_experience
+    from app.services import matching, workout_matching, planning, iron_coach
+    monkeypatch.setattr(athlete_clock, 'utc_now_naive', lambda: datetime(2026,10,22,12))
+    for module in (routes_experience, matching, workout_matching, planning, iron_coach):
+        monkeypatch.setattr(module, 'utc_now_naive', lambda: athlete_clock.utc_now_naive())
     engine = create_engine('sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine)
-    today = datetime.now(timezone.utc).date()
+    today = athlete_clock.athlete_today()
     with factory() as session:
         for workout_id, sport, day, status in [
             (1, 'cycling', today, 'planned'), (2, 'cycling', today, 'planned'),

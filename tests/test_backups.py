@@ -26,6 +26,7 @@ from app.db.models import Activity, Workout
 from app.db.planning_models import AthleteSettings
 from app.db.progress_models import GoalPreparationItem, WorkoutResolution
 from app.db.sync_models import IntervalsState
+from app.db.review_models import DuplicateReview
 from app.services import backups, planning
 
 
@@ -66,6 +67,79 @@ def preview(client, payload):
 
 def restore(client, token):
     return client.post('/backups/restore', json={'preview_token': token, 'confirmation': 'RIPRISTINA'})
+
+
+def review_row():
+    return DuplicateReview(candidate_id=1, action='merge', status='applied', activity_id=2, other_id=1,
+        before_json='{"private":"before"}', after_json='{"private":"after"}',
+        before_fingerprint='a' * 64, after_fingerprint='b' * 64, summary_json='{}')
+
+
+def test_restore_discards_rebuildable_distance_results_and_preserves_observations(api):
+    from app.db.effort_models import DistanceAnalysis
+    from app.db.iron_models import ActivityObservation
+    client, engine = api
+    raw = '{"streams":[{"type":"distance","data":[0,1000]}]}'
+    with Session(engine) as db:
+        db.add(ActivityObservation(activity_id=1,source_key='fit:one',payload_json=raw))
+        db.add(DistanceAnalysis(activity_id=1,fingerprint='b'*64,algorithm_version='synthetic',status='available',payload_json='{"derived_only":true}'))
+        db.commit()
+    exported = client.get('/backups/export').json()
+    assert 'distance_analyses' not in exported['data']
+    checked = preview(client, exported)
+    assert checked.status_code == 200
+    restored = restore(client, checked.json()['preview_token'])
+    assert restored.status_code == 200
+    with Session(engine) as db:
+        assert db.query(DistanceAnalysis).count() == 0
+        assert db.query(ActivityObservation).one().payload_json == raw
+
+
+def test_portable_backup_excludes_local_review_journal_and_restore_clears_it(api):
+    client, engine = api
+    with Session(engine) as db:
+        db.add(review_row()); db.commit()
+    exported = client.get('/backups/export')
+    assert 'duplicate_reviews' not in exported.json()['data']
+    assert 'private' not in exported.text
+    response = preview(client, exported.json())
+    assert 'cronologia' in response.json()['message']
+    result = restore(client, response.json()['preview_token'])
+    assert result.status_code == 200, result.text
+    assert result.json()['cleared_review_history'] == 1
+    with Session(engine) as db:
+        assert db.query(DuplicateReview).count() == 0
+        assert db.get(Activity, 1).name == 'Original'
+
+
+def test_journal_only_change_invalidates_restore_preview(api):
+    client, engine = api
+    token = preview(client, client.get('/backups/export').json()).json()['preview_token']
+    with Session(engine) as db:
+        db.add(review_row()); db.commit()
+    assert restore(client, token).status_code == 409
+    with Session(engine) as db:
+        assert db.query(DuplicateReview).count() == 1
+
+
+def test_restore_failure_keeps_journal_and_personal_data_atomically(api):
+    client, engine = api
+    with Session(engine) as db:
+        db.add(review_row()); db.commit()
+    payload = client.get('/backups/export').json()
+    payload['data']['activities'][0]['name'] = 'Should roll back'
+    token = preview(client, payload).json()['preview_token']
+    def fail_insert(connection, cursor, statement, parameters, context, many):
+        if statement.lower().startswith('insert into activities'):
+            raise OperationalError(statement, parameters, Exception('injected failure'))
+    event.listen(engine, 'before_cursor_execute', fail_insert)
+    try:
+        assert restore(client, token).status_code == 503
+    finally:
+        event.remove(engine, 'before_cursor_execute', fail_insert)
+    with Session(engine) as db:
+        assert db.query(DuplicateReview).one().before_json == '{"private":"before"}'
+        assert db.get(Activity, 1).name == 'Original'
 
 
 def test_export_is_download_and_excludes_credentials_and_remote_refs(api):

@@ -15,8 +15,13 @@ from app.db.iron_models import ActivityObservation
 from app.db.models import Activity
 from app.integrations import intervals, intervals_credentials
 from app.services.activity_rating import activity_ratings, recorded_loads
+from app.services.activity_effort import (number, parse_streams, channel_statistics, chart_points, compare_effort)
 from app.services.athlete_clock import as_utc_naive, utc_now_naive
 from app.services.training_load import sport_key
+from app.services.power_duration import best_power_efforts
+from app.services.distance_efforts import best_distance_efforts, best_pool_efforts
+from app.services.fit_observations import apply_recording_quality
+from app.services.observed_load import select_observation, MAX_OBSERVATIONS_PER_ACTIVITY
 
 STREAMS = {
     'watts': ('power', 'Potenza', 'W'),
@@ -35,28 +40,48 @@ _CACHE_LOCK = Lock()
 
 
 def _number(value, *, nonnegative=True):
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
-        return None
-    return float(value) if not nonnegative or value >= 0 else None
+    return number(value, nonnegative=nonnegative)
 
 
 def _load_json(value):
     try:
         result = json.loads(value)
         return result if isinstance(result, dict) else {}
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, RecursionError):
         return {}
 
 
-def local_observation(db, activity):
-    observations = db.query(ActivityObservation).filter_by(activity_id=activity.id).order_by(ActivityObservation.id.desc()).all()
+def _local_observation_details(db, activity):
+    observations = db.query(ActivityObservation).filter_by(activity_id=activity.id).order_by(
+        ActivityObservation.id.desc()).limit(MAX_OBSERVATIONS_PER_ACTIVITY + 1).all()
     intervals_rows = [row for row in observations if row.source_key.startswith('intervals:')]
-    row = intervals_rows[0] if intervals_rows else observations[0] if observations else None
-    remote_id = intervals_rows[0].source_key.split(':', 1)[1] if intervals_rows else (
-        activity.source_id.removeprefix('intervals:') if activity.source == 'intervals' else None)
-    if not isinstance(remote_id, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,80}', remote_id):
+    resolved = select_observation(activity, intervals_rows)
+    ambiguous = bool(intervals_rows and resolved['reason'] not in ('canonical_identity', 'single_observation'))
+    if len(observations) > MAX_OBSERVATIONS_PER_ACTIVITY:
+        ambiguous = True
+        resolved.update(status='conflict', reason='observation_limit', value=None)
+    selected = None if ambiguous else resolved['observation']
+    if not intervals_rows and not ambiguous:
+        selected = observations[0] if observations else None
+    content = _load_json(selected.payload_json) if selected else {}
+    if intervals_rows or ambiguous:
+        # The normalized observation's load is authoritative even when missing.
+        # Equivalent loads do not authorize choosing another alias's whole payload.
+        content.pop('icu_training_load', None); content.pop('training_load', None)
+        content['load'] = resolved['value']
+    remote_id = selected.source_key.split(':', 1)[1] if selected and selected.source_key.startswith('intervals:') else None
+    if not intervals_rows and activity.source == 'intervals' and isinstance(activity.source_id, str):
+        remote_id = activity.source_id.removeprefix('intervals:')
+    if ambiguous or not isinstance(remote_id, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,80}', remote_id):
         remote_id = None
-    return (_load_json(row.payload_json) if row else {}), remote_id
+    resolution = {key: resolved[key] for key in ('source','status','reason','value_reason','conflict','observation_count')}
+    resolution['ambiguous_identity'] = ambiguous
+    return content, remote_id, resolution
+
+
+def local_observation(db, activity):
+    content, remote_id, _ = _local_observation_details(db, activity)
+    return content, remote_id
 
 
 def _cached_remote(remote_id):
@@ -110,67 +135,72 @@ def _cached_remote(remote_id):
 
 
 def _sample(points, limit):
-    """Preserve extrema and explicit gaps rather than dropping peaks by stride."""
     if len(points) <= limit:
         return points
-    result = [points[0]]
+    # Reserve extrema and a gap per bucket. Mark every omitted interruption on
+    # the next retained point, so a display limit can never bridge a raw gap.
+    selected = {0, len(points)-1}
     buckets = max(1, (limit-2)//3)
     size = (len(points)-2) / buckets
     for index in range(buckets):
-        bucket = points[1+int(index*size):1+int((index+1)*size)]
-        valid = [point for point in bucket if point['value'] is not None]
-        selected = ([min(valid, key=lambda point: point['value']), max(valid, key=lambda point: point['value'])] if valid else [])
-        gap = next((point for point in bucket if point['value'] is None), None)
-        if gap:
-            selected.append(gap)
-        seen = set()
-        for point in sorted(selected, key=lambda point: point['time_s']):
-            if point['time_s'] not in seen:
-                result.append(point); seen.add(point['time_s'])
-    result.append(points[-1])
+        indices = range(1+int(index*size), 1+int((index+1)*size))
+        valid = [item for item in indices if points[item]['value'] is not None]
+        if valid:
+            selected.update((min(valid, key=lambda item: points[item]['value']),
+                             max(valid, key=lambda item: points[item]['value'])))
+        gap = next((item for item in indices if points[item]['value'] is None), None)
+        if gap is not None:
+            selected.add(gap)
+    breaks = [0]
+    for point in points:
+        breaks.append(breaks[-1] + (point['value'] is None or point.get('break_before', False)))
+    result = []; previous = None
+    for index in sorted(selected):
+        point = dict(points[index])
+        if previous is not None and breaks[index+1] > breaks[previous+1]:
+            point['break_before'] = True
+        result.append(point); previous = index
     return result
 
 
-def normalize_streams(raw, sport, *, max_time_s=None):
-    if not isinstance(raw, list):
-        return [], [], 0
-    by_type = {row.get('type'): row for row in raw if isinstance(row, dict) and isinstance(row.get('data'), list)}
-    times = by_type.get('time', {}).get('data', [])[:MAX_RAW_POINTS]
-    normalized_times = []; last = -1
-    for value in times:
-        current = _number(value)
-        if current is None or current < last or (max_time_s is not None and current > max_time_s):
-            normalized_times.append(None)
-        else:
-            normalized_times.append(current); last = current
+def _normalized_streams(parsed, sport):
     charts = []
-    for remote_kind, (kind, label, unit) in STREAMS.items():
-        data = by_type.get(remote_kind, {}).get('data', [])[:MAX_RAW_POINTS]
-        points = [{'time_s': stamp, 'value': _number(value, nonnegative=kind not in ('altitude', 'temperature'))}
-                  for stamp, value in zip(normalized_times, data) if stamp is not None]
+    for kind, label, unit in STREAMS.values():
+        values = parsed.channels.get(kind)
+        if values is None:
+            continue
+        points = chart_points(parsed, values)
         if not any(point['value'] is not None for point in points):
             continue
+        stats = channel_statistics(parsed, values)
         charts.append(dict(kind=kind, label=label, unit=unit, points=_sample(points, MAX_CHART_POINTS),
-                           sample_count=len(points), downsampled=len(points)>MAX_CHART_POINTS))
+                           sample_count=stats['sample_count'], downsampled=len(points)>MAX_CHART_POINTS,
+                           statistics=stats, stats_scope='raw_recording'))
         if kind == 'speed' and sport_key(sport) in ('run', 'swim'):
             distance = 100 if sport_key(sport) == 'swim' else 1000
-            pace = [{'time_s': point['time_s'], 'value': distance/point['value'] if point['value'] is not None and point['value'] > 0 else None}
-                    for point in points]
+            pace = [number(distance/value) if value is not None and value > 0 else None for value in values]
+            pace_points = chart_points(parsed, pace)
             charts.append(dict(kind='pace', label='Passo', unit='s/100m' if distance == 100 else 's/km',
-                               points=_sample(pace, MAX_CHART_POINTS), sample_count=len(points),
-                               downsampled=len(points)>MAX_CHART_POINTS))
-    gps = by_type.get('latlng', {})
+                               points=_sample(pace_points, MAX_CHART_POINTS), sample_count=stats['sample_count'],
+                               downsampled=len(pace_points)>MAX_CHART_POINTS,
+                               statistics=channel_statistics(parsed, pace), stats_scope='raw_recording'))
+    gps = parsed.gps or {}
     data = gps.get('data', [])[:MAX_RAW_POINTS]
     longitude = gps.get('data2') if isinstance(gps.get('data2'), list) else []
     coordinates = []
     for index, point in enumerate(data):
-        if normalized_times and index < len(normalized_times) and normalized_times[index] is None:
+        # A supplied time channel is authoritative, including invalid/short tails.
+        if parsed.has_time_channel and (index >= len(parsed.times) or parsed.times[index] is None):
             continue
         lat, lon = (point[:2] if isinstance(point, list) and len(point) >= 2 else (point, longitude[index] if index < len(longitude) else None))
         lat, lon = _number(lat, nonnegative=False), _number(lon, nonnegative=False)
         if lat is not None and lon is not None and -90 <= lat <= 90 and -180 <= lon <= 180:
-            coordinates.append(dict(lat=lat, lon=lon, time_s=normalized_times[index] if index < len(normalized_times) else None))
-    return charts, coordinates, sum(value is not None for value in normalized_times)
+            coordinates.append(dict(lat=lat, lon=lon, time_s=parsed.times[index] if index < len(parsed.times) else None))
+    return charts, coordinates, parsed.quality['valid_time_samples']
+
+
+def normalize_streams(raw, sport, *, max_time_s=None, elapsed_seconds=None):
+    return _normalized_streams(parse_streams(raw, max_time_s=max_time_s, elapsed_seconds=elapsed_seconds), sport)
 
 
 def _route_points(raw):
@@ -196,11 +226,11 @@ def _observed_rating(db, activity, summary):
     observed = [fresh if row.id == activity.id else row for row in rows]
     loads = recorded_loads(db, observed)
     loads[activity.id] = summary['load']
-    return activity_ratings(db, observed, loads=loads)[activity.id]
+    return activity_ratings(db, observed, loads=loads, target_ids={activity.id})[activity.id]
 
 
 def activity_detail(db, activity, *, fetch_remote=True):
-    payload, remote_id = local_observation(db, activity)
+    payload, remote_id, resolution = _local_observation_details(db, activity)
     raw_streams = payload.get('streams', [])
     map_points = payload.get('latlngs')
     remote_message = None; fetched = False; attempted = False
@@ -235,14 +265,36 @@ def activity_detail(db, activity, *, fetch_remote=True):
     }
     derived = []
     if summary['avg_speed'] is None and summary['distance_meters'] is not None and summary['duration_seconds']:
-        summary['avg_speed'] = summary['distance_meters'] / summary['duration_seconds']
-        derived.append('avg_speed')
-    summary['avg_pace_seconds_per_km'] = 1000 / summary['avg_speed'] if summary['avg_speed'] else None
-    summary['avg_pace_seconds_per_100m'] = 100 / summary['avg_speed'] if summary['avg_speed'] else None
+        summary['avg_speed'] = _number(summary['distance_meters'] / summary['duration_seconds'])
+        if summary['avg_speed'] is not None:
+            derived.append('avg_speed')
+    summary['avg_pace_seconds_per_km'] = _number(1000 / summary['avg_speed']) if summary['avg_speed'] else None
+    summary['avg_pace_seconds_per_100m'] = _number(100 / summary['avg_speed']) if summary['avg_speed'] else None
     if summary['avg_speed']:
         derived += ['avg_pace_seconds_per_km', 'avg_pace_seconds_per_100m']
     elapsed_to_now = (utc_now_naive() - as_utc_naive(activity.start_time)).total_seconds()
-    charts, coordinates, count = normalize_streams(raw_streams, activity.sport, max_time_s=elapsed_to_now)
+    parsed = parse_streams(raw_streams, max_time_s=elapsed_to_now, elapsed_seconds=summary['elapsed_seconds'])
+    if not (fetched and remote_streams):
+        apply_recording_quality(parsed, payload)
+    charts, coordinates, count = _normalized_streams(parsed, activity.sport)
+    effort = compare_effort(parsed, activity.sport)
+    effort['source'] = 'intervals_remote_streams' if fetched and remote_streams else 'stored_observation_streams'
+    best_efforts = best_power_efforts(parsed)
+    best_efforts['source'] = effort['source']
+    distance_efforts = best_distance_efforts(parsed, activity.sport)
+    distance_efforts['source'] = effort['source']
+    pool_payload = payload.get('pool_lengths')
+    if sport_key(activity.sport) == 'swim':
+        # FIT lengths have their own source identity; never substitute a step
+        # distance stream or choose arbitrarily among multiple imported files.
+        from app.services.effort_records import source_snapshot
+        pool_snapshot = source_snapshot(db, activity, family='fit')
+        if pool_snapshot['source_identity'] is not None:
+            pool_payload = pool_snapshot['payload'].get('pool_lengths')
+        elif pool_snapshot['resolution'] in ('ambiguous_identity', 'observation_limit'):
+            pool_payload = {'status': 'unavailable', 'issues': [pool_snapshot['resolution']]}
+    pool_efforts = best_pool_efforts(pool_payload, activity.sport, max_time_s=elapsed_to_now)
+    pool_efforts['source'] = 'stored_fit_lengths'
     if not coordinates:
         coordinates = _route_points(map_points)
     if elapsed_to_now < 0:
@@ -253,6 +305,9 @@ def activity_detail(db, activity, *, fetch_remote=True):
         coordinates = [coordinates[index] for index in indices]
     status = 'partial' if attempted and remote_message else 'complete' if charts else 'summary_only'
     message = remote_message or (None if charts else 'Sono disponibili i riepiloghi; questa attività non contiene serie temporali utilizzabili.')
+    if resolution['ambiguous_identity']:
+        status = 'partial'
+        message = 'Questa attività è associata a più registrazioni della fonte: mostro i riepiloghi conservati senza scegliere arbitrariamente un altro dettaglio.'
     references = {}
     if sport_key(activity.sport) == 'bike' and any(chart['kind'] == 'power' for chart in charts):
         from app.services.planning import load_settings
@@ -264,8 +319,10 @@ def activity_detail(db, activity, *, fetch_remote=True):
                                    'source_url': 'https://www.trainingpeaks.com/blog/power-training-levels/'}
     return dict(activity_id=activity.id, name=activity.name, sport=activity.sport, start_time=activity.start_time,
                 summary=summary, derived_fields=derived, streams=charts, chart_references=references,
+                effort_comparison=effort, best_efforts=best_efforts, distance_efforts=distance_efforts,
+                pool_efforts=pool_efforts, stream_quality=parsed.quality,
                 route=dict(available=len(coordinates)>=2, points=coordinates, sample_count=route_count,
                            downsampled=route_count>MAX_ROUTE_POINTS),
                 provider_url=f'https://intervals.icu/activities/{remote_id}' if remote_id else None,
-                availability=dict(status=status, message=message, remote_fetched=fetched, remote_attempted=attempted, time_samples=count),
+                availability=dict(status=status, message=message, remote_fetched=fetched, remote_attempted=attempted, time_samples=count, source_resolution=resolution),
                 coach_rating=_observed_rating(db, activity, summary))

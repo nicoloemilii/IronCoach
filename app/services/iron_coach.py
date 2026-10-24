@@ -1,13 +1,13 @@
 """Explainable assessments; no external language model or implicit workout matching."""
-import json
-import math
 from datetime import timedelta
 from statistics import mean
+from sqlalchemy import or_
 from app.db.models import Activity, Workout
 from app.db.experience_models import SessionFeedback
-from app.services.athlete_clock import athlete_today, activity_day, as_utc_naive, utc_now_naive
+from app.db.progress_models import WorkoutResolution
+from app.services.athlete_clock import athlete_today, activity_day, as_utc_naive, utc_now_naive, day_start_utc
 from app.services.evaluation import evaluate_workout
-from app.services.matching import activity_to_actual
+from app.services.execution_evidence import finite_number, safe_object, usable_feedback
 
 VERSION = 'rules-1'
 
@@ -24,67 +24,101 @@ def expected_benefit(sport):
 
 
 def grade(score):
-    if score is None: return 'Non valutabile'
+    if finite_number(score) is None: return 'Non valutabile'
     return 'Eccellente' if score >= 90 else 'Buono' if score >= 75 else 'Adeguato' if score >= 60 else 'Insufficiente' if score >= 40 else 'Scarso'
 
 
-def assess(db, activity):
-    feedback = db.query(SessionFeedback).filter_by(activity_id=activity.id).first()
-    workout = db.get(Workout, feedback.workout_id) if feedback else None
-    evidence = []; score = None; evaluation = None
-    if workout:
-        content = json.loads(feedback.payload_json)
-        actual = {**activity_to_actual(activity), 'rpe': content.get('rpe')}
-        planned = json.loads(workout.payload_json)
-        evaluation = evaluate_workout(planned, actual)
-        # The legacy evaluator assumes RPE 4 if the plan has no target. That
-        # fallback is not evidence for an objective execution assessment.
-        if planned.get('expected_rpe') is None:
-            evaluation['rpe_score'] = None
-        # Duration alone cannot produce a comprehensive judgment.
-        duration_available = (activity.duration_seconds is not None and math.isfinite(activity.duration_seconds)
-                              and activity.duration_seconds >= 0 and math.isfinite(workout.duration_min)
-                              and workout.duration_min > 0)
-        if duration_available and (evaluation['intensity_control'] is not None or evaluation['rpe_score'] is not None):
-            # Penalize both overshooting and undershooting the planned duration.
-            adherence = max(0, 100 - abs((activity.duration_seconds or 0) / 60 / max(workout.duration_min, 1) - 1) * 100)
-            components = [adherence] + [evaluation[k] for k in ('intensity_control', 'rpe_score') if evaluation[k] is not None]
-            score = round(mean(components), 1)
-        if activity.duration_seconds is not None:
-            evidence.append(f"Durata eseguita {activity.duration_seconds / 60:.0f} min; prevista {workout.duration_min:.0f} min.")
+def _assess_activity(activity, workout, feedback, *, today, now):
+    evidence = []; score = None; evaluation = None; issue = None
+    if workout and feedback:
+        checked = usable_feedback(workout, feedback, activity, today=today, now=now)
+        if checked['usable']:
+            content = checked['content']
+            actual = {'duration_min': checked['minutes'], 'rpe': content.get('rpe')}
+            planned = {**checked['planned'], 'duration_min': workout.duration_min}
+            evaluation = evaluate_workout(planned, actual)
+            duration_available = checked['minutes'] is not None
+            if duration_available and (evaluation['intensity_control'] is not None or evaluation['rpe_score'] is not None):
+                ratio = finite_number(checked['minutes'] / workout.duration_min)
+                if ratio is not None:
+                    adherence = max(0, 100 - abs(ratio - 1) * 100)
+                    components = [adherence] + [evaluation[k] for k in ('intensity_control', 'rpe_score') if evaluation[k] is not None]
+                    score = round(mean(components), 1)
+            if duration_available:
+                evidence.append(f"Durata eseguita {checked['minutes']:.0f} min; prevista {workout.duration_min:.0f} min.")
+            else:
+                evidence.append(f"Durata eseguita non disponibile; prevista {workout.duration_min:.0f} min.")
+            if content.get('rpe') is not None:
+                evidence.append(f"Sforzo dichiarato: RPE {content['rpe']}/10.")
         else:
-            evidence.append(f"Durata eseguita non disponibile; prevista {workout.duration_min:.0f} min.")
-        if content.get('rpe') is not None: evidence.append(f"Sforzo dichiarato: RPE {content['rpe']}/10.")
+            issue = checked['issue']
+    elif feedback:
+        issue = 'missing_workout'
     limits = ['Una valutazione di esecuzione non misura direttamente gli adattamenti fisiologici.']
-    if score is None: limits.append('Occorrono un abbinamento confermato, durata eseguita e prevista valida, e dati di intensità o feedback RPE.')
-    elif evaluation['intensity_control'] is None: limits.append('Controllo dell’intensità non verificato: mancano dati per fase.')
+    if score is None:
+        limits.append('Occorrono un abbinamento confermato, durata eseguita e prevista valida, e dati di intensità o feedback RPE.')
+    elif evaluation['intensity_control'] is None:
+        limits.append('Controllo dell’intensità non verificato: mancano dati per fase.')
+    if issue:
+        limits.append('Il collegamento o il feedback salvato non fornisce una conferma utilizzabile: rivedi la seduta.')
     return {'activity_id': activity.id, 'score': score, 'judgment': grade(score), 'evidence': evidence,
+            'evidence_issue': issue,
             'limits': limits, 'actions': ['Rivedi con precisione durata e intensità del programma.'] if score is not None and score < 60 else [],
             'benefits': expected_benefit(activity.sport) + ' Benefici attesi, non adattamenti misurati.',
             'rules_version': VERSION}
 
 
+def assess(db, activity):
+    feedback = db.query(SessionFeedback).filter_by(activity_id=activity.id).first()
+    workout = db.get(Workout, feedback.workout_id) if feedback else None
+    return _assess_activity(activity, workout, feedback, today=athlete_today(), now=utc_now_naive())
+
+
 def overview(db, day=None):
     today = day or athlete_today(); start = today - timedelta(days=27)
     now = utc_now_naive()
-    activities = [a for a in db.query(Activity).all()
-                  if as_utc_naive(a.start_time) <= now and start <= activity_day(a.start_time) <= today]
-    assessed = [assess(db, a) for a in activities]
-    scores = [a['score'] for a in assessed if a['score'] is not None]
+    activities = db.query(Activity).filter(Activity.start_time >= day_start_utc(start),
+        Activity.start_time < day_start_utc(today + timedelta(days=1)), Activity.start_time <= now).order_by(Activity.start_time, Activity.id).all()
+    past = db.query(Workout).filter(Workout.date >= str(start), Workout.date < str(today),
+        ~Workout.status.in_(['cancelled', 'superseded'])).all()
+    upcoming = db.query(Workout).filter(Workout.date >= str(today), Workout.status == 'planned').order_by(Workout.date, Workout.id).limit(7).all()
+    ids = [row.id for row in activities]; past_ids = [row.id for row in past]
+    feedback_rows = db.query(SessionFeedback).filter(or_(SessionFeedback.activity_id.in_(ids), SessionFeedback.workout_id.in_(past_ids))).all()
+    feedback_by_activity = {row.activity_id: row for row in feedback_rows if row.activity_id is not None}
+    feedback_by_workout = {row.workout_id: row for row in feedback_rows}
+    workout_ids = [row.workout_id for row in feedback_rows]
+    workouts = {row.id: row for row in past + upcoming}
+    missing_workout_ids = set(workout_ids) - set(workouts)
+    if missing_workout_ids:
+        workouts.update((row.id, row) for row in db.query(Workout).filter(Workout.id.in_(missing_workout_ids)))
+    activity_map = {row.id: row for row in activities}
+    missing_activity_ids = {row.activity_id for row in feedback_rows if row.activity_id is not None} - set(activity_map)
+    if missing_activity_ids:
+        activity_map.update((row.id, row) for row in db.query(Activity).filter(Activity.id.in_(missing_activity_ids)))
+    resolutions = {row.workout_id: row for row in db.query(WorkoutResolution).filter(
+        WorkoutResolution.workout_id.in_(past_ids), WorkoutResolution.undone_at.is_(None))}
+    assessed = [_assess_activity(a, workouts.get(feedback_by_activity[a.id].workout_id) if a.id in feedback_by_activity else None,
+        feedback_by_activity.get(a.id), today=today, now=now) for a in activities]
+    scores = [row['score'] for row in assessed if row['score'] is not None]
     execution_score = round(mean(scores), 1) if len(scores) >= 3 else None
-    confirmed = {row.workout_id for row in db.query(SessionFeedback).all()}
-    unresolved = db.query(Workout).filter(Workout.date >= str(start), Workout.date < str(today),
-                                         Workout.status == 'planned').all()
-    unresolved = [row for row in unresolved if row.id not in confirmed]
-    # Unreviewed past sessions are an evidence gap, not proof they were missed.
+    unresolved = []
+    for row in past:
+        feedback = feedback_by_workout.get(row.id)
+        checked = usable_feedback(row, feedback, activity_map.get(feedback.activity_id) if feedback else None, today=today, now=now)
+        resolution = resolutions.get(row.id)
+        resolved = resolution is not None and resolution.kind in ('skipped', 'rest')
+        if not checked['usable'] and not resolved and row.status != 'skipped':
+            unresolved.append(row)
+    # Unreviewed sessions and unusable feedback are evidence gaps, never
+    # automatically missed sessions, even if a stale status says completed.
     score = None if unresolved else execution_score
     judgment = 'Non valutabile' if score is None else 'Corretta' if score >= 75 else 'Mediamente Corretta' if score >= 60 else 'Scorretta'
-    upcoming = db.query(Workout).filter(Workout.date >= str(today), Workout.status == 'planned').order_by(Workout.date).limit(7).all()
     explanations = []
     for w in upcoming:
-        payload = json.loads(w.payload_json)
+        payload = safe_object(w.payload_json) or {}
+        reason = payload.get('reason')
         explanations.append({'id': w.id, 'date': w.date, 'name': w.name,
-                             'reason': payload.get('reason') or 'Seduta prevista dal piano personale.',
+                             'reason': reason if isinstance(reason, str) and reason.strip() else 'Seduta prevista dal piano personale.',
                              'expected_benefit': expected_benefit(w.sport),
                              'limits': 'Adattamento atteso, non misurato.'})
     evidence = [f'{len(scores)} attività valutabili su {len(activities)} negli ultimi 28 giorni.']

@@ -234,7 +234,7 @@ def test_existing_version_one_migrates_once_with_snapshot_and_keeps_cleared_manu
             assert snapshot.execute('SELECT sleep_hours,steps FROM daily_metrics').fetchone() == (None, 0)
             assert snapshot.execute("SELECT COUNT(*) FROM sqlite_master WHERE name='workout_resolutions'").fetchone()[0] == 0
         with Session(engine) as db:
-            assert {row.version for row in db.query(SchemaVersion)} == {1, 2}
+            assert {row.version for row in db.query(SchemaVersion)} == {1, 2, 3}
             assert db.query(Activity).one().source_id == 'preserved'
             assert db.query(HealthMetric).count() == 1  # Version two does not repeat manual import.
             assert health.effective_metrics(db, date(2026, 10, 17)) == {'steps': 0}

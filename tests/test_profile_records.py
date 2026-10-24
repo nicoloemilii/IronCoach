@@ -152,7 +152,7 @@ def test_missing_records_remain_null_without_computing_fake_speed_or_power(profi
     assert next(item for item in body['sports'] if item['sport']=='run')['records']['all_time']['longest_distance_km'] is None
 
 
-def test_totals_sum_only_documented_fields_and_do_not_resurrect_cleared_remote_load(profile_api):
+def test_totals_expose_documented_subtotals_and_do_not_resurrect_cleared_remote_load(profile_api):
     client,engine=profile_api
     with Session(engine) as db:
         one=add_activity(db,'Known',1,distance_meters=20000,elevation_gain_meters=200,load=30)
@@ -160,7 +160,11 @@ def test_totals_sum_only_documented_fields_and_do_not_resurrect_cleared_remote_l
         db.add(ActivityObservation(activity_id=two.id,source_key='intervals:Unknown',payload_json=json.dumps({'load':None})))
         db.commit()
     totals=client.get('/athlete/derived-profile').json()['totals']['all_time']
-    assert totals['distance_km']==20 and totals['elevation_m']==200 and totals['load']==30
+    assert totals['distance_km'] is None and totals['elevation_m'] is None and totals['load'] is None
+    assert totals['coverage_summary']['distance_km']['known_value']==20
+    assert totals['coverage_summary']['elevation_m']['known_value']==200
+    assert totals['coverage_summary']['load']['known_value']==30
+    assert totals['coverage_summary']['load']['complete'] is False
     assert totals['coverage']['distance_meters']==1 and totals['activities']==2
 
 

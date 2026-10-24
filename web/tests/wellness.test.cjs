@@ -9,6 +9,11 @@ const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
 const source = fs.readFileSync(path.join(__dirname, '../wellness.js'), 'utf8');
 const colorsSource = fs.readFileSync(path.join(__dirname, '../metric-status.js'), 'utf8');
 const clone = value => JSON.parse(JSON.stringify(value));
+function deferred() {
+  let resolve, reject;
+  const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
 
 function reportFixture(changes = {}) {
   return { id: 11, date: '2026-10-17', kind: 'contracture', label: 'Contrattura', body_location: 'polpaccio sinistro',
@@ -25,7 +30,7 @@ function profileFixture(changes = {}) {
     priorities: ['Ricostruisci continuità nel nuoto.'], restrictions: { reasons: [] }, ...changes };
 }
 
-async function setup(t, { page = 'health', reports = [], profile = profileFixture(), fail = {} } = {}) {
+async function setup(t, { page = 'health', reports = [], profile = profileFixture(), fail = {}, deferredReads = {} } = {}) {
   const errors = [];
   const virtualConsole = new VirtualConsole();
   virtualConsole.on('jsdomError', error => errors.push(error.message));
@@ -33,7 +38,7 @@ async function setup(t, { page = 'health', reports = [], profile = profileFixtur
   const w = dom.window;
   const $ = selector => w.document.querySelector(selector);
   const calls = [];
-  const data = { reports: clone(reports), profile: clone(profile), loads: 0, failures: { ...fail }, busy: false, openedActivities: [], openedMetrics: [] };
+  const data = { reports: clone(reports), profile: clone(profile), loads: 0, failures: { ...fail }, deferredReads, busy: false, openedActivities: [], openedMetrics: [] };
   const NativeDate = w.Date;
   w.Date = class extends NativeDate {
     constructor(...args) { super(...(args.length ? args : ['2026-10-18T10:00:00Z'])); }
@@ -77,6 +82,7 @@ async function setup(t, { page = 'health', reports = [], profile = profileFixtur
     const payload = options.body == null ? null : JSON.parse(options.body);
     calls.push({ url, method, payload });
     const key = `${method} ${url}`;
+    if (method === 'GET' && data.deferredReads[url]?.length) return clone(await data.deferredReads[url].shift().promise);
     if (data.failures[key]) throw new Error(data.failures[key]);
     if (url === '/health/reports' && method === 'GET') return { reports: clone(data.reports), restrictions: {} };
     if (url === '/health/reports' && method === 'POST') {
@@ -214,6 +220,93 @@ test('data loading is limited to the current page and navigation requests fresh 
   navigate('coach');
   await flush();
   assert.equal(calls.length, 2);
+});
+
+test('navigation loads the destination while a previous page is pending and ignores its late result', async t => {
+  const previous = deferred();
+  const { $, calls, flush, navigate } = await setup(t, {
+    deferredReads: { '/health/reports': [previous] },
+    profile: profileFixture({ headline: 'Profilo della pagina attuale' })
+  });
+  navigate('athlete');
+  await flush();
+  const destinationRequests = calls.filter(call => call.url === '/athlete/derived-profile').length;
+  const destinationBeforePreviousFinishes = $('#derived-profile').textContent;
+  previous.resolve({ reports: [reportFixture({ body_location: 'Risultato precedente' })] });
+  await flush();
+  assert.equal(destinationRequests, 1, 'Navigation must not wait for the previous page request.');
+  assert.match(destinationBeforePreviousFinishes, /Profilo della pagina attuale/);
+  assert.equal($('.symptom-journal').children.length, 0, 'A hidden page must not render an obsolete response.');
+  assert.equal(calls.some(call => call.method !== 'GET'), false);
+});
+
+test('data changes during a profile request coalesce into a latest refresh and preserve manual drafts', async t => {
+  const previous = deferred(), latest = deferred();
+  const { $, calls, data, flush, loaded } = await setup(t, {
+    page: 'athlete', deferredReads: { '/athlete/derived-profile': [previous, latest] }
+  });
+  const form = $('#athlete-form');
+  form.elements.ftp_watts.value = '243';
+  form.elements.limitations.value = 'Bozza ancora da salvare';
+  form.dataset.dirty = 'true';
+  data.profile = profileFixture({ headline: 'Dati dopo l’ultima sincronizzazione', total_activities: 179 });
+  loaded();loaded();loaded();
+  const contentBeforePreviousFinishes = $('#derived-profile').textContent;
+  previous.resolve(profileFixture({ headline: 'Dati prima della sincronizzazione', total_activities: 150 }));
+  await flush();
+  const contentWhileLatestIsPending = $('#derived-profile').textContent;
+  latest.resolve(data.profile);
+  await flush();
+  assert.equal(calls.filter(call => call.url === '/athlete/derived-profile').length, 2);
+  assert.equal(contentWhileLatestIsPending, contentBeforePreviousFinishes);
+  assert.match($('#derived-profile').textContent, /Dati dopo l’ultima sincronizzazione/);
+  assert.doesNotMatch($('#derived-profile').textContent, /Dati prima della sincronizzazione/);
+  assert.equal(form.elements.ftp_watts.value, '243');
+  assert.equal(form.elements.limitations.value, 'Bozza ancora da salvare');
+  assert.equal(form.dataset.dirty, 'true');
+  assert.equal(calls.some(call => call.method !== 'GET'), false);
+});
+
+test('an obsolete profile failure leaves current content intact while the latest refresh is pending', async t => {
+  const { $, calls, data, flush, loaded } = await setup(t, { page: 'athlete' });
+  const previous = deferred(), latest = deferred();
+  data.deferredReads['/athlete/derived-profile'] = [previous, latest];
+  loaded();loaded();
+  previous.reject(new Error('Errore della richiesta superata'));
+  await flush();
+  const waitingContent = $('#derived-profile').textContent;
+  const requestsWhileWaiting = calls.filter(call => call.url === '/athlete/derived-profile').length;
+  latest.resolve(profileFixture({ headline: 'Ultimo profilo disponibile' }));
+  await flush();
+  assert.equal(requestsWhileWaiting, 3);
+  assert.match(waitingContent, /Atleta di prova/);
+  assert.doesNotMatch(waitingContent, /non è disponibile/);
+  assert.match($('#derived-profile').textContent, /Ultimo profilo disponibile/);
+});
+
+test('leaving wellness discards pending background reads and late errors without losing a report draft', async t => {
+  const { $, calls, data, flush, loaded, navigate, open } = await setup(t, { reports: [reportFixture()] });
+  const form = open();
+  form.elements.body_location.value = 'Bozza spalla destra';
+  form.dataset.dirty = 'true';
+  const previous = deferred();
+  data.deferredReads['/health/reports'] = [previous];
+  loaded();loaded();
+  navigate('coach');
+  previous.reject(new Error('Errore dopo aver lasciato Salute'));
+  await flush();
+  const backgroundRequests = calls.filter(call => call.url === '/health/reports').length;
+  const hiddenJournal = $('.symptom-journal').textContent;
+  navigate('health');
+  await flush();
+  assert.equal(backgroundRequests, 2, 'A pending refresh must not start after leaving the page.');
+  assert.match(hiddenJournal, /Contrattura/);
+  assert.doesNotMatch(hiddenJournal, /Segnalazioni non disponibili/);
+  assert.equal(calls.filter(call => call.url === '/health/reports').length, 3);
+  assert.equal(form.elements.body_location.value, 'Bozza spalla destra');
+  assert.equal(form.dataset.dirty, 'true');
+  assert.equal($('#health-report-dialog').open, true);
+  assert.equal(calls.some(call => call.method !== 'GET'), false);
 });
 
 test('an unavailable journal offers retry and recovers without duplicating report cards', async t => {

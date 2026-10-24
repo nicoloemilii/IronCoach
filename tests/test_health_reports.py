@@ -159,6 +159,62 @@ def test_short_or_incompatible_history_does_not_invent_correlations(journal_api)
     assert 'non basta' in analysis['summary']
 
 
+@pytest.mark.parametrize('kind', ['hrv_ms', 'resting_hr_bpm'])
+def test_invalid_zero_cannot_complete_recent_or_baseline_symptom_comparisons(journal_api, kind):
+    client, engine = journal_api
+    with Session(engine) as db:
+        for ago in range(4, 11):
+            metric(db, TODAY - timedelta(days=ago), kind, 50)
+        metric(db, TODAY - timedelta(days=2), kind, 50)
+        metric(db, TODAY - timedelta(days=1), kind, 0)
+        db.commit()
+    body = report(client).json()
+    assert not body['analysis']['comparisons'] and not body['analysis']['associations']
+    # Two valid recent readings now exist, but six valid baseline readings plus
+    # one zero must still leave the reference incomplete.
+    with Session(engine) as db:
+        db.query(HealthMetric).filter_by(date=str(TODAY - timedelta(days=4)), kind=kind).one().value = 0
+        metric(db, TODAY - timedelta(days=3), kind, 50)
+        db.commit()
+    analysis = client.get(f"/health/reports/{body['id']}/analysis").json()
+    assert not analysis['comparisons'] and not analysis['associations']
+    with Session(engine) as db:
+        assert db.query(HealthMetric).filter_by(kind=kind, value=0).count() == 2
+
+
+def test_invalid_new_source_does_not_replace_valid_pre_symptom_observations(journal_api):
+    client, engine = journal_api
+    with Session(engine) as db:
+        for ago in range(4, 11):
+            metric(db, TODAY - timedelta(days=ago), 'hrv_ms', 60)
+        for ago in (2, 3):
+            metric(db, TODAY - timedelta(days=ago), 'hrv_ms', 45)
+        metric(db, TODAY - timedelta(days=1), 'hrv_ms', 0, source='manual')
+        db.commit()
+    analysis = report(client).json()['analysis']
+    hrv = next(item for item in analysis['comparisons'] if item['kind'] == 'hrv_ms')
+    assert hrv['baseline_value'] == 60 and hrv['recent_value'] == 45
+
+
+@pytest.mark.parametrize('raw', ['[]', 'null', '3', '"text"', 'true', 'not-json'])
+def test_non_object_observed_load_does_not_break_symptom_journal_or_reuse_old_load(journal_api, raw):
+    client, engine = journal_api
+    with Session(engine) as db:
+        for ago in (5, 10, 15, 20):
+            activity(db, f'old{ago}', TODAY - timedelta(days=ago), load=20)
+        row = activity(db, 'recent', TODAY - timedelta(days=1), load=100)
+        db.add(ActivityObservation(activity_id=row.id, source_key='intervals:recent', payload_json=raw))
+        db.commit()
+    response = report(client)
+    assert response.status_code == 201
+    assert not any(item['kind'] == 'load' for item in response.json()['analysis']['comparisons'])
+    assert client.get('/health/reports').status_code == 200
+    assert client.get(f"/health/reports/{response.json()['id']}/analysis").status_code == 200
+    with Session(engine) as db:
+        assert db.query(Activity).filter_by(source_id='recent').one().load == 100
+        assert db.query(ActivityObservation).one().payload_json == raw
+
+
 def test_load_comparison_respects_remote_explicit_null_instead_of_reusing_stale_load(journal_api):
     client, engine = journal_api
     with Session(engine) as db:

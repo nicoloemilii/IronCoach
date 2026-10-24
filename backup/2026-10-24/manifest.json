@@ -1,0 +1,2488 @@
+{
+  "date": "2026-10-24",
+  "purpose": "Public development backup, including unfinished work; not a release.",
+  "excluded": [
+    "Personal databases, activity/wellness data and original FIT files",
+    "Credentials and private keys",
+    "Installed dependencies, caches and generated runtime output"
+  ],
+  "redactions": [
+    {
+      "path": "docs/COACH_SYNC_2026_10_18.md",
+      "line_ranges": [
+        [
+          3,
+          7
+        ],
+        [
+          29,
+          29
+        ]
+      ],
+      "reason": "Personal activity and wellness observations omitted from the public backup."
+    },
+    {
+      "path": "docs/COACH_CONTESTUALE_2026_10_18.md",
+      "sentence_starts": [
+        "Il controllo API sul server personale ha rilevato"
+      ],
+      "reason": "Personal load and recovery observations omitted from the public backup."
+    },
+    {
+      "path": "docs/ATTIVITA_PESO_PALESTRA_2026_10_18.md",
+      "sentence_starts": [
+        "Prova API sul server personale",
+        "Sincronizzazione wellness"
+      ],
+      "reason": "Personal weight/GPS observation counts omitted from the public backup."
+    },
+    {
+      "path": "docs/APP_AUDIT_2026_10_19.md",
+      "line_ranges": [
+        [
+          113,
+          113
+        ]
+      ],
+      "reason": "Personal activity and wellness synchronization counts omitted from the public backup."
+    },
+    {
+      "path": "docs/ACTIVITY_EFFORT_2026_10_22.md",
+      "line_ranges": [
+        [
+          44,
+          44
+        ]
+      ],
+      "reason": "Personal recording timestamp counts omitted from the public backup."
+    },
+    {
+      "path": "docs/POWER_DURATION_2026_10_23.md",
+      "line_ranges": [
+        [
+          30,
+          30
+        ]
+      ],
+      "reason": "Personal provider recording sample counts omitted from the public backup."
+    }
+  ],
+  "files": [
+    {
+      "path": ".dockerignore",
+      "bytes": 93,
+      "git_blob_sha": "34e1699f3e866ca6b9ae9c28992e11005a98dc2f",
+      "sha256": "a361c21587966ba38e9b9cee2c0698a72e99057d5d640f8049b6ddbe57219339"
+    },
+    {
+      "path": ".env.example",
+      "bytes": 743,
+      "git_blob_sha": "13720abf851997b80e8f27083b5a45aff4e034c8",
+      "sha256": "3f81d0fb1f7c31ddf0a5d74726184657e983e1eea1d7d042719f66a1909143f3"
+    },
+    {
+      "path": ".github/dependabot.yml",
+      "bytes": 367,
+      "git_blob_sha": "ecf8f4312905a456c541886ba54940489d962d51",
+      "sha256": "018536e6a6f84524535ab7aeb9dab76d83ee76e51e2475c17bb3f42d6d02c03d"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "bytes": 1653,
+      "git_blob_sha": "3959771129ecb5be1a45a8dc20dab4c797ca0361",
+      "sha256": "6c0eb5f0d339569234f9c056455ea2c966dad6b8cf95ea9843144a1eb8f47699"
+    },
+    {
+      "path": ".gitignore",
+      "bytes": 288,
+      "git_blob_sha": "c2658b4f0ba09fd941750f89f6f27881634e9fbc",
+      "sha256": "2e8a8adc71e813ba67da82f14e13f4569e72a78cb6916e1318ade11c425906db"
+    },
+    {
+      "path": ".qa/audit-revision2.py",
+      "bytes": 2864,
+      "git_blob_sha": "fc9b7202eef1c6833a378b7f80759b421bccae8f",
+      "sha256": "ef2c5c5e930d04f70d8feeed08182f7adda840a312cd8e52e0db0ac75969735a"
+    },
+    {
+      "path": ".qa/commercial1/harness.cjs",
+      "bytes": 5946,
+      "git_blob_sha": "ea0829806c50dcb51603b28fbbba7bdc264b7909",
+      "sha256": "69d70646ac8ab16a12d473cafac4692f12777bec3a6eaaffd607972e9db86eaf"
+    },
+    {
+      "path": ".qa/commercial1/package.py",
+      "bytes": 4272,
+      "git_blob_sha": "61b68f05d4e4a743d3b09fe02784aa535da807b5",
+      "sha256": "096a9b543a700a617c8362d9678bbeb8b5946c2a73817d49845d83596a60840d"
+    },
+    {
+      "path": ".qa/commercial1/run.py",
+      "bytes": 3088,
+      "git_blob_sha": "aa55127403b6a28babe516d475953817e3065a63",
+      "sha256": "7347a58ef5d53223ad7bc7d6369c4f2d59b14961f8d85c0b9f34b195e6f4a4c0"
+    },
+    {
+      "path": ".qa/commercial1/seed.py",
+      "bytes": 319,
+      "git_blob_sha": "b24ad849a25b1ecaab7130491cdf78c131cac9fb",
+      "sha256": "fc83f8a37f23f8095526e694f792d05b67c3fa4c7b0750dd4fb7114c2018849d"
+    },
+    {
+      "path": ".qa/create_release.py",
+      "bytes": 4978,
+      "git_blob_sha": "9958b27d1413fe110f99dd7ae2939e8b6c355e1b",
+      "sha256": "06bcb62009465c2b1681d9ba348b29984023d03bcd773fd4f4d700ab51e0c79b"
+    },
+    {
+      "path": ".qa/github-backup-20261024/prepare_backup.py",
+      "bytes": 6661,
+      "git_blob_sha": "15aa55bbbdb24dd17a77f35f205b18236d0c93e4",
+      "sha256": "f576382409178bc58a399473094f7c839b67e2c418f9bfad4c91932e05cfb5f6"
+    },
+    {
+      "path": ".qa/github-backup-20261024/prepare_public.py",
+      "bytes": 4738,
+      "git_blob_sha": "fb1170c8d7b86e895c9086c01819521e813714dd",
+      "sha256": "c790509e64f7dfd9c9a63159229dccd33eea88b7dd7e80ebb4e313a2f86bd871"
+    },
+    {
+      "path": ".qa/github-backup-20261024/redactions.json",
+      "bytes": 1197,
+      "git_blob_sha": "a9fc085ebfc5ffec6ea76360b13244ee3bd96047",
+      "sha256": "3def1faee20c7c1631e08fcb9cefe762564b38a3aeda730ff8854feb5f5ef0b8"
+    },
+    {
+      "path": ".qa/goal-audit/backend-findings.md",
+      "bytes": 5259,
+      "git_blob_sha": "673857b9148da671eac03987c9a6476a317d5105",
+      "sha256": "4f0a3a408a26d32608183eee712360031d3393e95d48947ee17911778971bf5b"
+    },
+    {
+      "path": ".qa/goal-audit/harness.cjs",
+      "bytes": 11940,
+      "git_blob_sha": "03ca30c6db21515bb26393bb78ca9dd100356d9c",
+      "sha256": "1bf504d0fe554825650c878102508b8137ac091d7996cb484a77fac802a720c6"
+    },
+    {
+      "path": ".qa/goal-audit/package.py",
+      "bytes": 11892,
+      "git_blob_sha": "63f582982911442253c6f08464face36fb4d3cf8",
+      "sha256": "fb9cb751832f5c3b9a8bd614cd4480c6094ffa048bdd746d7c7d51b4ac823482"
+    },
+    {
+      "path": ".qa/goal-audit/profile_backend.py",
+      "bytes": 4916,
+      "git_blob_sha": "d6bc375e8c850cdc2e36a26e6e4e0d125dae7093",
+      "sha256": "75c05a0e43839207ba8d7b932feaef65579ac9369f122340aae462f9bd5c6210"
+    },
+    {
+      "path": ".qa/goal-audit/read_only_duplicate_audit.py",
+      "bytes": 4627,
+      "git_blob_sha": "fab3d115a47dca9d82acd78037da37a241b4430d",
+      "sha256": "d562c0e9e8dab292aa785f29e9e6d5ec7184d9e40dfc3fa9461cb2b118e8929f"
+    },
+    {
+      "path": ".qa/goal-audit/reproduce_same_provider_duplicates.py",
+      "bytes": 1971,
+      "git_blob_sha": "e3a8609dbf1608681da672ca9d59189af16c5fb5",
+      "sha256": "c4ddfc855324ba51478c9631dec10668e0149d3694a7ae86f8b0e1311e307b2e"
+    },
+    {
+      "path": ".qa/goal-audit/restart-local.ps1",
+      "bytes": 1811,
+      "git_blob_sha": "019bde089773c8afb9e95f0b72daea5302d85f20",
+      "sha256": "f78e4c1607e22c759672104acf343055ec9eee10c105647560439d34b25961ca"
+    },
+    {
+      "path": ".qa/goal-audit/run.py",
+      "bytes": 3391,
+      "git_blob_sha": "2275e5f1e90218da2465bbbd8463d7e2e791cd50",
+      "sha256": "5cb7d20dc0bddf23021aeea6dedc07234fc91ad49fd721c299268c3f06b20716"
+    },
+    {
+      "path": ".qa/goal-audit/run_backend.py",
+      "bytes": 1517,
+      "git_blob_sha": "b3285753286db08884284efbb9a7ddb1ab8fd6fe",
+      "sha256": "e5bf39ae4158049b245b5b6ae11ded7bffdc17381b468a918865c7fd72b34029"
+    },
+    {
+      "path": ".qa/goal-audit/seed.py",
+      "bytes": 4177,
+      "git_blob_sha": "8ef896b591df7512a610031e8740a5312fdf6086",
+      "sha256": "b255e084b948d42a7d1318940a91280f711e5cf8fb8824d9b2e58a6aec86dfc0"
+    },
+    {
+      "path": ".qa/goal-audit/validate_duplicate_summary_readonly.py",
+      "bytes": 1784,
+      "git_blob_sha": "3d5f55a93450c7786d1f5c13bd7b2862bd464b18",
+      "sha256": "79cc4e09aef07862372bed327b1fc35e2186fcf44a16336e9b86a1bab3a36e4b"
+    },
+    {
+      "path": ".qa/goal-distance/frontend_proposal.md",
+      "bytes": 5525,
+      "git_blob_sha": "97a8d858f2fba3875ca642995ecc8f73692a269d",
+      "sha256": "d442fc03280ed767caf4fbd6565bc5a52ad3b8a35e1f81b01ffb7e688de54a78"
+    },
+    {
+      "path": ".qa/goal-distance/package.py",
+      "bytes": 11948,
+      "git_blob_sha": "d63a30e4ce0df06b3f7e3b625b7e561d193b1a58",
+      "sha256": "dea8cc5549448855899a4c1070ea1d46b2dd654582568af8623d29407a2b4f8a"
+    },
+    {
+      "path": ".qa/goal-effort/browser_server.py",
+      "bytes": 2468,
+      "git_blob_sha": "e5e143e411950b1a2fe719c98e9158b168759fc2",
+      "sha256": "3fbb3c19aff14544a9c5cc0c9ae3163dbb53135dbab68f233269d3a7c0dcef3b"
+    },
+    {
+      "path": ".qa/goal-effort/package.py",
+      "bytes": 11723,
+      "git_blob_sha": "a19a5a2486ee27629166c4c31914498805882089",
+      "sha256": "b2490cde7963b6b784f597084bcc3b5802dde214f87fd7667cf49617edc895bd"
+    },
+    {
+      "path": ".qa/goal-effort/probe_stream_normalization.py",
+      "bytes": 2481,
+      "git_blob_sha": "dac8156497965277c58c4183c152b94674c3dcd2",
+      "sha256": "66233253e99c94e005425e7bc1afef4c887e6312e32d690ee610016dabb57853"
+    },
+    {
+      "path": ".qa/goal-effort/research_notes.md",
+      "bytes": 6939,
+      "git_blob_sha": "8a2e4236a85bed56936069e9c0aca3ae7491cb35",
+      "sha256": "ea8c0dce6f88bcd018b37f5f64f932b19afd1263e7423505e4080bf8b07ec015"
+    },
+    {
+      "path": ".qa/goal-effort/restart-runtime.ps1",
+      "bytes": 1847,
+      "git_blob_sha": "37281b948816c22e45c6b4666013a88d732164f4",
+      "sha256": "9b6c13595963462c7823187e77eda6bea0c8053ccbe9a61fb88901d18291425d"
+    },
+    {
+      "path": ".qa/goal-effort/review_api.py",
+      "bytes": 13284,
+      "git_blob_sha": "50218d183daa04cfbfea57de8e81281641ed8730",
+      "sha256": "bac3c6292f550067c57441890b4fdc558a62fd146bfc0aaa18f7a3aa87c4bdc8"
+    },
+    {
+      "path": ".qa/goal-effort/review_dom.cjs",
+      "bytes": 5815,
+      "git_blob_sha": "3030d6a584c81c56d43e79554c6ee1b606992155",
+      "sha256": "7e2fc680c71a73dd1c1c8fe14464495536a30b367d46766fb4fb5cc473d8eac3"
+    },
+    {
+      "path": ".qa/goal-effort/review_streams.py",
+      "bytes": 3803,
+      "git_blob_sha": "753af7e20a80818ac823671e887d1a3aa2a1bb4b",
+      "sha256": "096a935cbc41e333d988349d52d35793adb3c905b1df081e7ab8e77d2d67c571"
+    },
+    {
+      "path": ".qa/goal-effort/verify_runtime.py",
+      "bytes": 4114,
+      "git_blob_sha": "5f16b925490efa254762bd6659403dba8094bcda",
+      "sha256": "4ea09caae12db733087c915c7d1affcef061d5dbc1f986ca34aaac0994b5f8fa"
+    },
+    {
+      "path": ".qa/goal-execution/browser_server.py",
+      "bytes": 3226,
+      "git_blob_sha": "a685980f8a4e4db1d2ccab633973fbe5450fcae2",
+      "sha256": "c5e2583ef436fc4bc0416e85282292ba4042c0c0f910cef4c4e68ad17dd75389"
+    },
+    {
+      "path": ".qa/goal-execution/package.py",
+      "bytes": 11945,
+      "git_blob_sha": "dfdad20a9ec93910114784e0b9ce6fd2460f606a",
+      "sha256": "2007b95240b12873cd45b437d0a335cea444675fd10212008dad0623f59f2aa0"
+    },
+    {
+      "path": ".qa/goal-execution/prepare_baseline.py",
+      "bytes": 1873,
+      "git_blob_sha": "d94539a9d7bb446696a57c15c43b4f2d08a3e6cf",
+      "sha256": "764b7d0c0766b829bb8ace3a81d8b701519c6f0ef6c375e57ea752e70d967c79"
+    },
+    {
+      "path": ".qa/goal-execution/restart-network.ps1",
+      "bytes": 1868,
+      "git_blob_sha": "299dba17886b6ef0527140e897eca01c005601c6",
+      "sha256": "f152488bbea2fbb7781c54ea4ab01583206e2bcaf2f2300b8bc726ba20c773be"
+    },
+    {
+      "path": ".qa/goal-execution/review_api.py",
+      "bytes": 17022,
+      "git_blob_sha": "d86a9d82cd8b284169bdfc55cb7da23fce5007f0",
+      "sha256": "12c56a48e482a07c972ead058f4c1f16672c299a945bf5bed7e55ede5577892f"
+    },
+    {
+      "path": ".qa/goal-execution/review_dom.cjs",
+      "bytes": 13668,
+      "git_blob_sha": "131d31953be63df8b34840325699893123efeb9a",
+      "sha256": "450d059ba6fa4ecbca3fb45f97e16fd8fd86b380c6f6ff7d3481235f6c5f915c"
+    },
+    {
+      "path": ".qa/goal-execution/start-runtime.ps1",
+      "bytes": 1611,
+      "git_blob_sha": "43a6de1ca991bcab5e877c46933620156b108ccb",
+      "sha256": "908147ef67db91b6a80aba19ced73d1f55c79012d90069c2b4776a6bc14fbab3"
+    },
+    {
+      "path": ".qa/goal-execution/verify_runtime.py",
+      "bytes": 3051,
+      "git_blob_sha": "5cb3ec33e82240c6d158cd12dd040534020dbf92",
+      "sha256": "80690bd5bb171678764bd81de6dd927746f270823e680f3db77fd5a6238dd01e"
+    },
+    {
+      "path": ".qa/goal-followup/package.py",
+      "bytes": 11705,
+      "git_blob_sha": "f8757d02da68ec6a7f7f5fa8042d820e1708089d",
+      "sha256": "0c412050535915607fa2580e52f2993c11be125243436d93c1b63b43a7893a86"
+    },
+    {
+      "path": ".qa/goal-followup/restart-local.ps1",
+      "bytes": 1814,
+      "git_blob_sha": "b524a67c3b498e7e547bf66ab2ba133e6d117401",
+      "sha256": "6fc15713f7c5671636d70a79bb456206debd4248043f678078c57ae26fbe0214"
+    },
+    {
+      "path": ".qa/goal-followup/verify_runtime.py",
+      "bytes": 2671,
+      "git_blob_sha": "09b31e3e58d6616a8c5424b5c89fe153a447845e",
+      "sha256": "0960c7fbe6654c8271f4109ff158428673be398d347d6520a89c969a274e94b5"
+    },
+    {
+      "path": ".qa/goal-history/browser_server.py",
+      "bytes": 4999,
+      "git_blob_sha": "828168c058bd17379f5efd7f6b5d17ed7ef19d42",
+      "sha256": "7097b36ed3b9789b0286ff97a185a1c34a5cc01bbfe87c871a858735b1927578"
+    },
+    {
+      "path": ".qa/goal-history/package.py",
+      "bytes": 11726,
+      "git_blob_sha": "8488a8576eab10a6d3556ab9124c52acde266206",
+      "sha256": "6d916a19a1a7db5e6a4eeecfc98866d1e5d01d0f23cf643919442bd8fb7b674c"
+    },
+    {
+      "path": ".qa/goal-history/restart-runtime.ps1",
+      "bytes": 1850,
+      "git_blob_sha": "c36feb4178e3ff0b9b0f83d9dbaf5d94b6606ca6",
+      "sha256": "1164dc8a7f7c6f5bb060d329316455d9c8c27e758981e4c133812c4e302b8729"
+    },
+    {
+      "path": ".qa/goal-history/review_dom.cjs",
+      "bytes": 13289,
+      "git_blob_sha": "6134d6884df5e5a4d37cd6bcca7a4040b6566908",
+      "sha256": "9b766692e2fc9caefadef36ba51be462955004fc0f6291173aed66899581c2fd"
+    },
+    {
+      "path": ".qa/goal-history/review_profile.py",
+      "bytes": 8256,
+      "git_blob_sha": "b8c7304842dd724bcd3f4c2abf5bb81b9d63586c",
+      "sha256": "9be38e87ec5ee2229bb0060212e1128e5204f56966dcc4f87cbb2266fbfb0566"
+    },
+    {
+      "path": ".qa/goal-history/verify_runtime.py",
+      "bytes": 4171,
+      "git_blob_sha": "4a1360c662d4b3451be3c413a08f8a9760796ac3",
+      "sha256": "60811f31e2af6bb38598cbba71c46bde83214268fff39685884e15525b002a08"
+    },
+    {
+      "path": ".qa/goal-performance/activity_rating.baseline.py",
+      "bytes": 17080,
+      "git_blob_sha": "2aaa5deae52aca6622bf5202c09631c9e53290a5",
+      "sha256": "a4e3c488ec729832754620bb88aca1c9c776ba3f41bb915aef26c799af7ff354"
+    },
+    {
+      "path": ".qa/goal-performance/benchmark_baseline.py",
+      "bytes": 4615,
+      "git_blob_sha": "7dcedbf6f9bbee40d610f6ff76b827f8a8cb41a0",
+      "sha256": "9aa81574179540d325e0f7e5d09026cf84b284c0e466195ab5a5708dc3fd2dbe"
+    },
+    {
+      "path": ".qa/goal-performance/benchmark_optimized.py",
+      "bytes": 6836,
+      "git_blob_sha": "349af045e3aee520607fbd02434bbf8be5d23859",
+      "sha256": "0efdee37280aa9ef83bd9001449841d94b9639ab932dcbbdcc4d7899fded32eb"
+    },
+    {
+      "path": ".qa/goal-performance/benchmark_optimized_final.py",
+      "bytes": 6854,
+      "git_blob_sha": "aa1712392c62f777296a16e85d348a7043101310",
+      "sha256": "8d632e4cbe5553f692739aa163c31d1842e9dcdb20ff85bc65dd95ee1da1734e"
+    },
+    {
+      "path": ".qa/goal-performance/benchmark_optimized_v2.py",
+      "bytes": 6845,
+      "git_blob_sha": "9621b87d36d6f1ffe180a6814a20ce4d28cbe11e",
+      "sha256": "1c4b23df3501cef6d3c08b574e5ee69acffa689660e4dc567215ae1186a055f3"
+    },
+    {
+      "path": ".qa/goal-performance/browser_server.py",
+      "bytes": 7763,
+      "git_blob_sha": "9c0e9c927e1bec6d78370c5f95d2fcd0d4a0b413",
+      "sha256": "c4929bda15033ea188d457e62318cb9da17828b7ab8ad2d4cdaf1e7896177823"
+    },
+    {
+      "path": ".qa/goal-performance/diary_api_benchmark.py",
+      "bytes": 5097,
+      "git_blob_sha": "1f54ad944762495931cc0f64b5db621ef3027ed9",
+      "sha256": "6beb2be9075b82928d1b4747208fa7ec6547a9ec074b3b1c66e641b819f7dd83"
+    },
+    {
+      "path": ".qa/goal-performance/final_check.py",
+      "bytes": 1881,
+      "git_blob_sha": "608173296953bd272f28a78188dc7c7ae4e69c96",
+      "sha256": "a1a30ee11a089a9ad0504c3849ec3dd2ea7d5c630fb9dc6b50f4810aa1164acd"
+    },
+    {
+      "path": ".qa/goal-performance/frontend_audit.cjs",
+      "bytes": 6658,
+      "git_blob_sha": "df8240c6007647e2f4ac9cbe895e903fe06d232e",
+      "sha256": "8d87fa4cca615ff5329f0002696aeb0c924446321a7e604aa6e7898d00e9246d"
+    },
+    {
+      "path": ".qa/goal-performance/frontend_review.md",
+      "bytes": 2874,
+      "git_blob_sha": "19efe6f72548f9fa7dd70c9f5651240486a48769",
+      "sha256": "6ddc18fc23b1b1af76f053b4a5a2b615f0c49c8a5e0c016911d474decd2b1ff3"
+    },
+    {
+      "path": ".qa/goal-performance/package.py",
+      "bytes": 11736,
+      "git_blob_sha": "6f31ed36e1c6188e973f34da5ba7ae5d3e2d4642",
+      "sha256": "70b038d424a9544ae1a1a40d66e45a0d5d783a5c823d82e83d87cd1418a03fbe"
+    },
+    {
+      "path": ".qa/goal-performance/probe_sum_parity.py",
+      "bytes": 1673,
+      "git_blob_sha": "0c5ca57c61b5d1e7e56b12e8c886acbb7afbbd87",
+      "sha256": "571e0c0c82d0e47b135dbd38c97003405861890dc934a9dcba706776c412ed94"
+    },
+    {
+      "path": ".qa/goal-performance/prove_exact_sum.py",
+      "bytes": 3043,
+      "git_blob_sha": "2d6d1241acbf58ded3916b6152b214894d1c022b",
+      "sha256": "bb9e717dfe142c60f6e85b3f0c18c9e66a21b1dccdf1e4fadae1f23150a71963"
+    },
+    {
+      "path": ".qa/goal-performance/rating_review.md",
+      "bytes": 3864,
+      "git_blob_sha": "874e85c38c2ca34338e6109aa22654d1d5bbcf6a",
+      "sha256": "49d5bda16971aff8af6954ab8b9a22b32a25f0c46c014fe7dcf7bf502e8a1327"
+    },
+    {
+      "path": ".qa/goal-performance/rating_review.py",
+      "bytes": 5435,
+      "git_blob_sha": "e54f6a01fd9f4f34c96ee80cb0eb9b63f83c13ee",
+      "sha256": "a7e6062708480f870b94d763ba7732bb41107f611e6cab6d0756b6d6dc67d0a8"
+    },
+    {
+      "path": ".qa/goal-performance/rating_review_final.md",
+      "bytes": 2504,
+      "git_blob_sha": "77bac837bfdeb05907fe41b623ca974ee9d26708",
+      "sha256": "8f92b084b43f1c52184966b9e0eccd9fe4be30e4d8bef6661f210cf19e9ff4b2"
+    },
+    {
+      "path": ".qa/goal-performance/rating_review_final.py",
+      "bytes": 7160,
+      "git_blob_sha": "7bd152e4834d44ad8c2c88a6407b36e4a5e35b07",
+      "sha256": "448c1455815e168adec229c0126db74b2ab09e39cb610d278635734dda694d72"
+    },
+    {
+      "path": ".qa/goal-performance/restart-runtime.ps1",
+      "bytes": 1831,
+      "git_blob_sha": "ae487d41c6202ef174dbe800bc055819a3fc4650",
+      "sha256": "3379ef3901fc1052d834c20e1961e2699c0c47094391c1dc81cf95c441b14a4f"
+    },
+    {
+      "path": ".qa/goal-performance/review_dom.cjs",
+      "bytes": 10769,
+      "git_blob_sha": "0f993844307a933253096ae2b09d6ab0fd681972",
+      "sha256": "150f9c8552a266c7153569440cfb82ca16186ca1f332f0886766d4e1957be959"
+    },
+    {
+      "path": ".qa/goal-performance/verify_diary_api.py",
+      "bytes": 6231,
+      "git_blob_sha": "36db302fc5682bbfe2baa9d7f330965cc8baa41c",
+      "sha256": "30cde72663dca10b3a6ca72957bd88baf728633e47cb7eba570718d9846140d2"
+    },
+    {
+      "path": ".qa/goal-performance/verify_runtime.py",
+      "bytes": 3594,
+      "git_blob_sha": "05c69274fba8d577c6c79739e42f05a282053a40",
+      "sha256": "c2c8cd412b8eaa000f148538a2fecafd8c300aaf34a16be27a133c029dafd9fb"
+    },
+    {
+      "path": ".qa/goal-power/benchmark.py",
+      "bytes": 1487,
+      "git_blob_sha": "d78acbd24ccb023d6c8aaa25a8ed736fb485625e",
+      "sha256": "7f15ccc316b375c19e7489a7f9148e39e247ffff2a3b1ddb9d8eba3bcfa25328"
+    },
+    {
+      "path": ".qa/goal-power/browser_server.py",
+      "bytes": 5491,
+      "git_blob_sha": "e76cfe95fea1868d931c97b4f9d5c78242ad9347",
+      "sha256": "b34e2a5eff6161b788b578b48f1d88c59067699e726a0a5d49b1215891a404a7"
+    },
+    {
+      "path": ".qa/goal-power/final_check.py",
+      "bytes": 2122,
+      "git_blob_sha": "8ba12de723435ca101cf2718643733ec19602ab8",
+      "sha256": "9680e8b268de8a42d47fc1d1786740110073e52effc9e2a6d5fb653879720361"
+    },
+    {
+      "path": ".qa/goal-power/oracle.py",
+      "bytes": 7691,
+      "git_blob_sha": "caa3fdf7bf2bfb1b01d2b3b6b41ca401e7f2679e",
+      "sha256": "990bdc8c6c32fdaedcd0e49a2ec3259f27fb97121454d7445c1329d929b3f353"
+    },
+    {
+      "path": ".qa/goal-power/package.py",
+      "bytes": 11941,
+      "git_blob_sha": "e08433bf8b7e01dfe13ba2a3ea1f17d47d13f85a",
+      "sha256": "d5b995ff4701282296aff86cc7a2b2d32218e2b97de925f668b92a0e17c2d63d"
+    },
+    {
+      "path": ".qa/goal-power/probe_precision.py",
+      "bytes": 1175,
+      "git_blob_sha": "05dc04eb4584b3bce50935d249af23b2a222f65d",
+      "sha256": "72f309cb6a96aab6f38fbb8f2caeecf5b92b39ff69f5a4ac1a91bd4f9ab64504"
+    },
+    {
+      "path": ".qa/goal-power/request_completion_audit.md",
+      "bytes": 10838,
+      "git_blob_sha": "e03657a069f5b12a9fcb11df4f8fc214acf6ebba",
+      "sha256": "b2ae63a9bc94a68537f180e911abb53fd621e08bbd9c67a5bdb14989cfe587b1"
+    },
+    {
+      "path": ".qa/goal-power/restart-runtime.ps1",
+      "bytes": 1842,
+      "git_blob_sha": "f1c71e35a3503c5337704a6fd441984da2a4e603",
+      "sha256": "5f229d218b7587024a8d81df0c17fb900460817145c810066ed2b0ce84b3a44c"
+    },
+    {
+      "path": ".qa/goal-power/review_api.py",
+      "bytes": 8395,
+      "git_blob_sha": "b0df9a72c60fca6f37223dc2733088f225a8cc2b",
+      "sha256": "650ad63c353749e480603c4d76d5a401a7671b55de799d6c9d8ce81acadb6674"
+    },
+    {
+      "path": ".qa/goal-power/review_dom.cjs",
+      "bytes": 14585,
+      "git_blob_sha": "bc5d60c628f4c6435922bf2159d6666a9139d827",
+      "sha256": "e1c39e47eebf50a56073e0236df0e11072099fad6c5f1ac33af38257d59cb0e8"
+    },
+    {
+      "path": ".qa/goal-power/review_math.py",
+      "bytes": 8759,
+      "git_blob_sha": "ae30bbcb0ad32e0338f0312155e469346f7d6246",
+      "sha256": "3d8459e71025e93451c58a978cc1a9b57a3d3c415c36a0e48b851fe02454eb47"
+    },
+    {
+      "path": ".qa/goal-power/verify_runtime.py",
+      "bytes": 4551,
+      "git_blob_sha": "926da75c2d9f89b01ad3b2dce8b692b325171592",
+      "sha256": "e68c7b089acca3238f6dd18d197ba860ea4a544b2a73b219dfb619e7dbea8597"
+    },
+    {
+      "path": ".qa/goal-profile-audit/frontend_review.cjs",
+      "bytes": 7349,
+      "git_blob_sha": "789ce03cf521ab2af7d11b6aca12399917483016",
+      "sha256": "cd5c6bbfa718cff3297903a7054053440ebe2dfaa307d2071e5bbeba822267aa"
+    },
+    {
+      "path": ".qa/goal-records/benchmark_records.py",
+      "bytes": 4071,
+      "git_blob_sha": "f6e88988a10258b2144b8296f7e5813fbceef5a1",
+      "sha256": "ab56925a24df7ac71171a0031d822e4effa278fa042eeded3588b382fbaa0351"
+    },
+    {
+      "path": ".qa/goal-records/browser_server.py",
+      "bytes": 5015,
+      "git_blob_sha": "464e8f9c554d54c1b2f57e230a156df7062c661e",
+      "sha256": "003129615a88f0139ef2e22d079ce3eea860b83a2e082ba08187e17bc2059d69"
+    },
+    {
+      "path": ".qa/goal-records/final_check.py",
+      "bytes": 2446,
+      "git_blob_sha": "a0327f9d7e3430ef8fb7ccf6972841e7737fa028",
+      "sha256": "ca49e7f71119eb097c349b3edad6b96c410802546be19e7f6e002523d8942898"
+    },
+    {
+      "path": ".qa/goal-records/frontend_review.md",
+      "bytes": 2926,
+      "git_blob_sha": "d601623802fe78ae19842e5236804d63b906cd14",
+      "sha256": "5e81043614a8f118cec005999eb1f89448dbfcea75fde7e4bfc3a29184564920"
+    },
+    {
+      "path": ".qa/goal-records/package.py",
+      "bytes": 11951,
+      "git_blob_sha": "6f3ac2b457d13bd1b13c0563fc718b7e792c1298",
+      "sha256": "570cb1a1509fb95bd7e156b8882661abbe94a041f6def3954d6a557c92568a75"
+    },
+    {
+      "path": ".qa/goal-records/restart-runtime.ps1",
+      "bytes": 1844,
+      "git_blob_sha": "b741d0e68adcbf31e8d309578b72cf2d90087a2e",
+      "sha256": "cd1692163d767eb742d8c503187b1217ccb505670f1613d8ca9f9e0e84ede6ae"
+    },
+    {
+      "path": ".qa/goal-records/review_api.py",
+      "bytes": 10552,
+      "git_blob_sha": "1ebe7e61e36494b0539eb8da65bf2934c6d009ac",
+      "sha256": "2e628e7e970fa52c8935c62b5bc193bb448793a7b806a30fb38ca350eb49769e"
+    },
+    {
+      "path": ".qa/goal-records/review_dom.cjs",
+      "bytes": 15318,
+      "git_blob_sha": "ae09e4327a12e36a4ea10b6f9fb23ca9672b5527",
+      "sha256": "38161cd473dec0b7892dbbc242517bbcf71f7452539fe555abb200e3713fb2bb"
+    },
+    {
+      "path": ".qa/goal-records/review_notes.md",
+      "bytes": 8668,
+      "git_blob_sha": "11b5bda97ce3c9107efd87b304f92380d187d2b5",
+      "sha256": "4ecd63406676c6a5aacf0aea6876f5ef67f5035ae30af4f3e3f1e777ef7fcfd9"
+    },
+    {
+      "path": ".qa/goal-records/verify_runtime.py",
+      "bytes": 3186,
+      "git_blob_sha": "17de1741738e041fb5272db3c3cdc6888fc44835",
+      "sha256": "46ce105a9d4fa49bb02177eda890f803419523aff8bef175e099ec9f39929536"
+    },
+    {
+      "path": ".qa/goal-response/package.py",
+      "bytes": 11729,
+      "git_blob_sha": "b9194079be7f9110b2bc14f757cf8bd7597df2a7",
+      "sha256": "3ed8533531650e689c35c13ed2f0e824677c0cc7e9ab1955c0d7c1bc16fa9e5c"
+    },
+    {
+      "path": ".qa/goal-response/prepare_baseline.py",
+      "bytes": 2014,
+      "git_blob_sha": "9cb838af728d9819bbf963b6956e24c224cb6cbd",
+      "sha256": "4b1777bcfb9df8ad83b9f807a1a0e46a0ee4cdc81e597a5dd2e06f9115f934ef"
+    },
+    {
+      "path": ".qa/goal-response/restart-final.ps1",
+      "bytes": 1847,
+      "git_blob_sha": "11003285216e36f097296474f8059f18ccbef49e",
+      "sha256": "be3d3149fa2aeda3037cd358b7e1e601a096ed6be50f10cc9a812cf4fa05d2cf"
+    },
+    {
+      "path": ".qa/goal-response/restart-local.ps1",
+      "bytes": 1813,
+      "git_blob_sha": "817f19be011b518da9ab8fe3a8cb4b6378b008ab",
+      "sha256": "c3fe5877eb9daebc5f902944389405c29dcab8ad7eeb04655d953dcd7ea30508"
+    },
+    {
+      "path": ".qa/goal-response/review_api.py",
+      "bytes": 12918,
+      "git_blob_sha": "cc1a20ac7eff7698756f5a84da63cc4cad172f19",
+      "sha256": "54bc568b3ce3dbab083958a14e74a34dc1169ab10499c546f2c883f3bbf3e857"
+    },
+    {
+      "path": ".qa/goal-response/review_dom.cjs",
+      "bytes": 12231,
+      "git_blob_sha": "6cd633e3372ba83cf34b920a117a9bb3936bda87",
+      "sha256": "024494fddcadff53470c6ddc8b4c42a3abc4672f989732229d7bb8c6d1e62bf5"
+    },
+    {
+      "path": ".qa/goal-response/review_duplicate_cost.py",
+      "bytes": 2546,
+      "git_blob_sha": "20a5729ab2fc11fef94fac83ae558d22a853e34a",
+      "sha256": "05f967486b37de7ad5e8c214d8426623734bc6499f4c47d82d611c8f86631480"
+    },
+    {
+      "path": ".qa/goal-response/review_duplicate_counting.py",
+      "bytes": 2109,
+      "git_blob_sha": "f2f8da59f57f41730555006a993887a77d01bc97",
+      "sha256": "8dc4bdd9e2d57b739ac9e9d3f21487e9d08864717bced75f995b4a24b985e79d"
+    },
+    {
+      "path": ".qa/goal-response/verify_runtime.py",
+      "bytes": 3307,
+      "git_blob_sha": "2e04efd3b0a159e0abb58e9c2a513cbb12830b3e",
+      "sha256": "1773b1cc587aedaa41fd4cc1c68e93600918db93008770d1c624423d9336107e"
+    },
+    {
+      "path": ".qa/goal-review/browser_server.py",
+      "bytes": 3869,
+      "git_blob_sha": "d84df4534dc6fea509143a669964a69d81b7b798",
+      "sha256": "b4afee28001689c1d804a6b066d00d28f2b77ae56ffd8aa56f03468cfd727fb3"
+    },
+    {
+      "path": ".qa/goal-review/package.py",
+      "bytes": 11725,
+      "git_blob_sha": "571c33a62f1adaf0598ef23c723d78a825c68130",
+      "sha256": "31d8396c92bfa6314d3c424582539bae37f909f763320b4ab2e78cca7fa2a70a"
+    },
+    {
+      "path": ".qa/goal-review/prepare_baseline.py",
+      "bytes": 1997,
+      "git_blob_sha": "3118d8f8da90d1b2495a52916b83182b1a27a4ad",
+      "sha256": "c4ab835966328d12d0bebf73c1e8bc5fb48dff1c6516be6c61833b2a17d35e69"
+    },
+    {
+      "path": ".qa/goal-review/restart-runtime.ps1",
+      "bytes": 1983,
+      "git_blob_sha": "3255c9e88f0fc14593e196e2a40a13a6745d4bce",
+      "sha256": "e99048fd920add138b69dcfaf3befc1138a02022bef16fac4c6c9ac42d719e77"
+    },
+    {
+      "path": ".qa/goal-review/review_dom.cjs",
+      "bytes": 13143,
+      "git_blob_sha": "21a7df181f49c27886956a6c3b359a5f882b0907",
+      "sha256": "10654c2c0f5c357c8ae785a1dfe1c1e97116454df85485f23ffa57a6db8ab833"
+    },
+    {
+      "path": ".qa/goal-review/review_http.py",
+      "bytes": 17676,
+      "git_blob_sha": "1d1d0507cf8682bccb53698b5f061a6b9e19ce25",
+      "sha256": "960222a58a67e08e49433a5d8f6d192e052edc4f3f560f1428b1a22515b83aa5"
+    },
+    {
+      "path": ".qa/goal-review/verify_runtime.py",
+      "bytes": 3417,
+      "git_blob_sha": "971c67a1c4d114bce7290c515153957fa28f43a4",
+      "sha256": "a0c055489c8f33db013bcc836611e99b7e674f9b49e29ddbc43b86e3bfd53ce1"
+    },
+    {
+      "path": ".qa/manual-e2e/harness.cjs",
+      "bytes": 9244,
+      "git_blob_sha": "9717e378bd150c5793069d1814b9602667729fe3",
+      "sha256": "d38dafa57858eb5bf8483473b8033e6fd1c0d34376ffcd81a9a991286de25326"
+    },
+    {
+      "path": ".qa/manual-e2e/run.py",
+      "bytes": 2492,
+      "git_blob_sha": "210ba1b5112f4dae3eabc97b2965a861a1922131",
+      "sha256": "f74155a33dc49688b972c42d90ebd94d421b5e76021c80e1d98fcf28a79f1994"
+    },
+    {
+      "path": ".qa/prepare-revision2.py",
+      "bytes": 3584,
+      "git_blob_sha": "b1e04d142ea0e4ba597f326416989e90f064e68c",
+      "sha256": "52182d402ec3f8b42560f93139bcd6ff0fe620e1c17be8570bda4b2527ddbf8a"
+    },
+    {
+      "path": ".qa/rating-audit-20261022/probe_rating.py",
+      "bytes": 6234,
+      "git_blob_sha": "50e231246f714c207ad7b4993710aae4c8fda110",
+      "sha256": "814f75bd0f34375f74aa15568adf51fa98e0c1a2590e9b1b09bd378748ea9e16"
+    },
+    {
+      "path": ".qa/revision3/chart-preview.cjs",
+      "bytes": 2593,
+      "git_blob_sha": "8619e4eb06c9fe61f2c67865b945bd28de0ea94f",
+      "sha256": "7058173ea57bd3e2327df2ac33ff72ec03a6d2c58adcba9455781ea7bdc01fee"
+    },
+    {
+      "path": ".qa/revision3/harness.cjs",
+      "bytes": 5206,
+      "git_blob_sha": "36122e68d848dc99aa55997657470b2b38367186",
+      "sha256": "1ad8c18fc65cf430bc9051a33491d3f5574cbd3d505fc672a83cced88d26161a"
+    },
+    {
+      "path": ".qa/revision3/package.py",
+      "bytes": 4060,
+      "git_blob_sha": "b5ee497b946d3ff3526e585939be25affc21f3eb",
+      "sha256": "f6434c0602c6c14aa61ac6811cbc3904ca4f18355d10def7d99b22d154ee9c95"
+    },
+    {
+      "path": ".qa/revision3/run.py",
+      "bytes": 2548,
+      "git_blob_sha": "f6564bf1197a985d0005691d9934f1f0a2728d35",
+      "sha256": "b309c7c97aaf37b152f1d9ccf0c56d5e9e07efa4727f62e691bb912813680e17"
+    },
+    {
+      "path": ".qa/revision4/harness.cjs",
+      "bytes": 3362,
+      "git_blob_sha": "6ecc28da0d4319565f4744b9778d6f7dce1f49bd",
+      "sha256": "3fec2de3b9eddc1c1c6ff0b6fe32dcf279c7acd12ac248aae55be175f8a6e2a2"
+    },
+    {
+      "path": ".qa/revision4/package.py",
+      "bytes": 4097,
+      "git_blob_sha": "3b70eea7f9918e6d0a8f883061a341f18f06b857",
+      "sha256": "5953c702e2896cbfe166e399432dd4accc133448b5d8f5bd3a4fc0a2d152d36d"
+    },
+    {
+      "path": ".qa/revision4/run.py",
+      "bytes": 2684,
+      "git_blob_sha": "0d2b3e33084aa9b1f3feeecf4566ed5e3a68ad78",
+      "sha256": "99b626afba6eca68b87066a16d8cb3bd81d0152e2c90226f0cfd81b0229f0df3"
+    },
+    {
+      "path": ".qa/revision4/seed.py",
+      "bytes": 453,
+      "git_blob_sha": "bbc9a54c394a77d6978cca4fcc40a5c4084ade49",
+      "sha256": "96e9b16728eca2c6695a3fcf1ee4ae578f7a0b92d61418e985ce66c4ccfd977b"
+    },
+    {
+      "path": ".qa/revision5/harness.cjs",
+      "bytes": 5063,
+      "git_blob_sha": "376eff41d04bb6ad8ba572f2d99eeab22518ecec",
+      "sha256": "51c8836ff418c8930297b26a865672d826da93edc9626ccbf1c83b93984d80d4"
+    },
+    {
+      "path": ".qa/revision5/package.py",
+      "bytes": 4113,
+      "git_blob_sha": "783eae03558b450a7ab1b784128837683a988bf1",
+      "sha256": "e8a2ed4a26858f62df3d20af71be1ce6e03a4c5c1f9c6ef2998b4443b68dc5bf"
+    },
+    {
+      "path": ".qa/revision5/run.py",
+      "bytes": 2684,
+      "git_blob_sha": "0d2b3e33084aa9b1f3feeecf4566ed5e3a68ad78",
+      "sha256": "99b626afba6eca68b87066a16d8cb3bd81d0152e2c90226f0cfd81b0229f0df3"
+    },
+    {
+      "path": ".qa/revision5/seed.py",
+      "bytes": 897,
+      "git_blob_sha": "59ac19bfc4c0d4600c92476fafce18db3071e845",
+      "sha256": "1dd9bbfc1cbdcd9b48e316d8e2c2c7839dd27938a26bde4d99e9cd47b2d8728b"
+    },
+    {
+      "path": ".qa/revision6/package.py",
+      "bytes": 4115,
+      "git_blob_sha": "b5dd0d206e5bce9861ebfa3a5c2ea5e32ec244e0",
+      "sha256": "ff9d65a965031672dac40ae3915a6e915fa9b6ff564671b220841ab51f38d00d"
+    },
+    {
+      "path": ".qa/revision7/harness.cjs",
+      "bytes": 4421,
+      "git_blob_sha": "3e17951bd0a0d2c2990e055a4f3c1d0ee7696919",
+      "sha256": "68d0e81c3dca4a1c8e9f3ee894a62e7ce92f79162e6d9f3d117f2a3ccddbb2e6"
+    },
+    {
+      "path": ".qa/revision7/package.py",
+      "bytes": 4125,
+      "git_blob_sha": "0dabd03a022c5998da1dda933fa959cc42c84f42",
+      "sha256": "47ec3747db745edb5d5a975c9245b4d29ff39648f95ad5c5dcdc972ae0b62567"
+    },
+    {
+      "path": ".qa/revision7/run.py",
+      "bytes": 2684,
+      "git_blob_sha": "0d2b3e33084aa9b1f3feeecf4566ed5e3a68ad78",
+      "sha256": "99b626afba6eca68b87066a16d8cb3bd81d0152e2c90226f0cfd81b0229f0df3"
+    },
+    {
+      "path": ".qa/revision7/seed.py",
+      "bytes": 121,
+      "git_blob_sha": "a578b8a70dc7e967c11f343f76f239469f31e2a0",
+      "sha256": "87c11d12fb8a77f2b8782a88d1ab2acb2ccddd58ddf6fcbd52cf2e34d9c06db7"
+    },
+    {
+      "path": ".qa/visual-charts.cjs",
+      "bytes": 1654,
+      "git_blob_sha": "eafab59d666b2719f77170d9a8644e040c20370a",
+      "sha256": "a94bc0fa3e84f7f6a14a07770ddb915511ce0d441cf982cd2fd4f690b1c4b548"
+    },
+    {
+      "path": "Avvia_Web.bat",
+      "bytes": 837,
+      "git_blob_sha": "0f8978199ca89fe0a52a38d3d13c765cafed9888",
+      "sha256": "9f8d77b8368b874dfc129ab0ca0a7df1f80fc55cc0bab0e68745307133c08c8c"
+    },
+    {
+      "path": "Dockerfile",
+      "bytes": 838,
+      "git_blob_sha": "13f83963fa4dfe923f9298e3050f46d5f3239abf",
+      "sha256": "227a510cfb009a1dfd78728edef73520fbffb887c7d18a7eadfc124a110eb9c1"
+    },
+    {
+      "path": "GARMIN.md",
+      "bytes": 8889,
+      "git_blob_sha": "437f9426bdfd43e7ab49fb3a05f0e11f27edf267",
+      "sha256": "e05c25ad427f2a5bfa1d1547d372e2761cb5859553c373ec87c022220a4ff35a"
+    },
+    {
+      "path": "INSTALL_FINAL.bat",
+      "bytes": 841,
+      "git_blob_sha": "14f128a6f5491e39254da5825091aba76421011f",
+      "sha256": "f1c73c40f1f85e48e684553e8ca89e4dcf16bea19be5f633d8836de2a9f51db3"
+    },
+    {
+      "path": "IronmanCoach.bat",
+      "bytes": 201,
+      "git_blob_sha": "1f2b3691c7ad8227efcaffb3870c825b768a5ec9",
+      "sha256": "808787af4558d6a883fe97d8e2bf4da412af6c4d7c9d6323a834efcacdee8170"
+    },
+    {
+      "path": "README.md",
+      "bytes": 21562,
+      "git_blob_sha": "70e2e79bdde082b33e979bdfb4805f2347dbd47b",
+      "sha256": "2ad810a3c0501da5063ac3a66f3d7df79f9a9a85112924c765859d1dadf00a3c"
+    },
+    {
+      "path": "THIRD_PARTY_NOTICES.md",
+      "bytes": 1966,
+      "git_blob_sha": "7324d1035aaa5ca3e2e86c5771ac56a33eaaabee",
+      "sha256": "176ee6d22563b14e9d337b5f705ad2bfd6f822e32283a679c3d4e6eb4c2a5d15"
+    },
+    {
+      "path": "app/__init__.py",
+      "bytes": 0,
+      "git_blob_sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "app/api/errors.py",
+      "bytes": 681,
+      "git_blob_sha": "1745d3b6cc230b0c34cb9255014b2cdcd5c42d35",
+      "sha256": "cf64d78865a2cd80679fd737d110fcb51338f27d8ccd2d70fc33e5eeecdaf335"
+    },
+    {
+      "path": "app/api/routes_activity_detail.py",
+      "bytes": 719,
+      "git_blob_sha": "b6c5c93ef83281137b011adfc3ab1cb530f7e361",
+      "sha256": "daa545fbfbd172b1793b2b4802b9e7c3fefcf86eddfa8c3eff1957c74a7f43c7"
+    },
+    {
+      "path": "app/api/routes_analysis.py",
+      "bytes": 1482,
+      "git_blob_sha": "3d13a532093ed354c2c23c916a91d6b046bd2740",
+      "sha256": "6931b0b481f2459483cc987a658867af750d36c074dede1f1f8bfa54ad60db4e"
+    },
+    {
+      "path": "app/api/routes_athlete.py",
+      "bytes": 2834,
+      "git_blob_sha": "62dec241f9827860e2cbb544c184c02f47f5cc4a",
+      "sha256": "22e8eccdd8860908373ca71fe880672cda1ed013c564b661875b23a7f1f416dd"
+    },
+    {
+      "path": "app/api/routes_backup.py",
+      "bytes": 1804,
+      "git_blob_sha": "6e38afa6b6f7c6912c90ffea0c4779fa3b0c85c4",
+      "sha256": "17cdc63735274717e3a715536b70716942dc5c7c03a2c0ac37f79faca1a3debf"
+    },
+    {
+      "path": "app/api/routes_coach.py",
+      "bytes": 21122,
+      "git_blob_sha": "75a1d73bde53f28394b10da2823c8bc69b11165c",
+      "sha256": "edbfe14c595a5882da82dbd0fae3a14d9be3bb0bcacda1c2845f2dd0fdf174b1"
+    },
+    {
+      "path": "app/api/routes_coach_backup.py",
+      "bytes": 5801,
+      "git_blob_sha": "67d2a80f6d7e7865984a753f31fc89414616911f",
+      "sha256": "f9f5c1474e340c4e1941bbf65754a9b402115a8b3fc15dfa5514a264f3de278c"
+    },
+    {
+      "path": "app/api/routes_dashboard.py",
+      "bytes": 3263,
+      "git_blob_sha": "78637529b4746cc0b0b50bce595940fc174dcb28",
+      "sha256": "01faf12be31927d45518445f0888a4beebe780ae410702962a0d1e165b86962d"
+    },
+    {
+      "path": "app/api/routes_duplicate_review.py",
+      "bytes": 1103,
+      "git_blob_sha": "d790e4e8bbfab7d6d58830cb710ce640736886cf",
+      "sha256": "fb902328365cba71b60e55fedbdec9440d54917661efd2215df7922ad80f6c99"
+    },
+    {
+      "path": "app/api/routes_effort_records.py",
+      "bytes": 1892,
+      "git_blob_sha": "79ce621ad750a09ab4c3a18e8be08666e8b36bdc",
+      "sha256": "c946e34d0ff9ac2a75d641edd3775d3c01609241f7f4867cfb7141219256b969"
+    },
+    {
+      "path": "app/api/routes_experience.py",
+      "bytes": 20520,
+      "git_blob_sha": "5688db7b0d2a65886d0a5458a10b5bff8b665597",
+      "sha256": "b5c97d824dbd8e36bdf6ca52e9dda386e40de210bb822ee49258594a256042f7"
+    },
+    {
+      "path": "app/api/routes_garmin.py",
+      "bytes": 3363,
+      "git_blob_sha": "6fc0f0475d8258dab59f7a4146cd7ebed9cd9c1b",
+      "sha256": "310b4144b45d77ebcda42c4752020288e50c3a83863da42c50b46d372ff69be1"
+    },
+    {
+      "path": "app/api/routes_health_reports.py",
+      "bytes": 2676,
+      "git_blob_sha": "b2189d9aba4089da1e3d21f3447177a21915820d",
+      "sha256": "a58a85587c336926bee3d5696711fa1645f42b758fd5947af991d61564bb2448"
+    },
+    {
+      "path": "app/api/routes_import.py",
+      "bytes": 440,
+      "git_blob_sha": "628d89d986f8cb5d5a2bb8d201c4db1b755487f4",
+      "sha256": "fd54d2cd767e7a13d21472798a8f3677f6a6600812be3d2c9b095518a4e6fefa"
+    },
+    {
+      "path": "app/api/routes_iron.py",
+      "bytes": 15809,
+      "git_blob_sha": "3bf261db9a56d4a203d3bf78e107691d4194a083",
+      "sha256": "ff84cf557021be3d1cb795012c62d1f747d496ca32920ddb71779e0d24536443"
+    },
+    {
+      "path": "app/api/routes_planning.py",
+      "bytes": 3542,
+      "git_blob_sha": "e5645cee59d0c5b9e87d479bdd387c1c313dbff7",
+      "sha256": "20eca096ea602b624bc7b4a678311709a494598ca818d68e5446fbf05919a34a"
+    },
+    {
+      "path": "app/api/routes_progress.py",
+      "bytes": 6285,
+      "git_blob_sha": "3a1bdf94cbc63fa9c27baf76fad23aff56e92734",
+      "sha256": "1790c9b55ad99ab4f76e777940c8782614d4cce13bb445593408c347b91afd84"
+    },
+    {
+      "path": "app/api/routes_strava.py",
+      "bytes": 3061,
+      "git_blob_sha": "5f607eb9e8c9fccf3ac13f697cc8699470633cbb",
+      "sha256": "a0ccc05271d095e575be011d3d4209049f82de607fe611049d4f5ec0b92dabb8"
+    },
+    {
+      "path": "app/api/routes_sync.py",
+      "bytes": 11338,
+      "git_blob_sha": "be806698c3bed6353c7ecae6c205246ae2f320a6",
+      "sha256": "af932acbd5bc11485ce2fa9b688daf77b29522178b26df0e281024ec6f273649"
+    },
+    {
+      "path": "app/api/routes_training.py",
+      "bytes": 813,
+      "git_blob_sha": "74d55968ce8385e027b30cc75b160751d3bea1bd",
+      "sha256": "a9d5ff68e2b5236d954cd703dbdd0292aac876b052116b863b0d6fcbd1071e33"
+    },
+    {
+      "path": "app/api/routes_training_insights.py",
+      "bytes": 718,
+      "git_blob_sha": "9e2f16cbf0271de1adf2dfe1787307fa374dc721",
+      "sha256": "6b3b8be57ee39b0bd95b201a18e39b895d515571cfeb5ef2d95affe6749389a8"
+    },
+    {
+      "path": "app/api/routes_training_response.py",
+      "bytes": 892,
+      "git_blob_sha": "e16ce4d101b33c8f3bb45f9779f610ccf3a1c732",
+      "sha256": "2e24e143293bfde8aeb51e0c255c9b6cb1360a421674eb2c52dd84165ef06c63"
+    },
+    {
+      "path": "app/commercial/__init__.py",
+      "bytes": 76,
+      "git_blob_sha": "86ef015ab24323d3aee8a8fe266d71b29b6edbcb",
+      "sha256": "43f216f1d428aa72d025e2a81934871bdbd91f47b52cc17a598b33160d2bd9e6"
+    },
+    {
+      "path": "app/commercial/accounts.py",
+      "bytes": 13283,
+      "git_blob_sha": "5230bbb90d55649e036a141ee06899fde627beed",
+      "sha256": "d0b7707b5343a0f84e6af994caab923cbdf20c309d6bacecc20ee8c97c5ae228"
+    },
+    {
+      "path": "app/commercial/billing.py",
+      "bytes": 6128,
+      "git_blob_sha": "b1b4d07f145557ddc5d83154d3f87d44e2cc76d2",
+      "sha256": "eabb10142fcb3412d20eebc78c4f434e007f3ba4da41dd1d20e9b6a267c55c1f"
+    },
+    {
+      "path": "app/commercial/cli.py",
+      "bytes": 2692,
+      "git_blob_sha": "85d27261a02345969942010e533f2a652017b812",
+      "sha256": "9c47337fda04e648f72f346c80fa2c9f34e5c29ae051cc5798f5a9dea2f32ce8"
+    },
+    {
+      "path": "app/commercial/config.py",
+      "bytes": 3285,
+      "git_blob_sha": "9a8687e704b838c540e7796056e3fa1f205e2082",
+      "sha256": "6f81ac228fe85e3879aa4fff541d47ce213dd1791c1b5b360fd00881784afdf2"
+    },
+    {
+      "path": "app/commercial/middleware.py",
+      "bytes": 8658,
+      "git_blob_sha": "42f209c478b3cd979d0a9eb78df397668fb49ed3",
+      "sha256": "2381f0f3f16d091c064c1ad0cbf8ef7f27e848d5d6f46d2cade12172faa55634"
+    },
+    {
+      "path": "app/commercial/mutations.py",
+      "bytes": 978,
+      "git_blob_sha": "c0b3429cb533da4b33e1953cc52a016b55575228",
+      "sha256": "2eb12b8f7a90f2978994f0d0d96a71016b1a31cd45f159f61ad47934f4b700af"
+    },
+    {
+      "path": "app/commercial/operations.py",
+      "bytes": 7653,
+      "git_blob_sha": "c59233cb099295e0cedeeef1597e21d0b0d66048",
+      "sha256": "f6aa4fa10e67f30c7ceb7595ef0b6d4540542d64bf3dfa95cc3c01ff58de2961"
+    },
+    {
+      "path": "app/commercial/routes.py",
+      "bytes": 6439,
+      "git_blob_sha": "75e3555dea5528dbfadb36c3abaee87f8885a60c",
+      "sha256": "c21191e6826c23271c0feb8aefdc8fcdd771e5d8ddb29eee286adb2f5f8a97a6"
+    },
+    {
+      "path": "app/commercial/setup.py",
+      "bytes": 1758,
+      "git_blob_sha": "a25672906319a75d1b66e83f52c7f9ec2fcd8d76",
+      "sha256": "2267240c34c38123c64a31b9fe8eb4e30e44d26696b9df2b8a4f36d181639295"
+    },
+    {
+      "path": "app/config.py",
+      "bytes": 0,
+      "git_blob_sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "app/db/database.py",
+      "bytes": 2648,
+      "git_blob_sha": "809dd4d2576394320756afd3ae7f664136045eee",
+      "sha256": "1d4195991067a172f9f45abed4fe9619deb756d3b7adf811e5bce4d815c72019"
+    },
+    {
+      "path": "app/db/effort_lock.py",
+      "bytes": 1222,
+      "git_blob_sha": "38a78db988ed270b507841472fe64cc6904a2a0b",
+      "sha256": "ada88201abf292235d8ffdbc0a4f3a3557c40a77aaa0c574a5bb81aa0d1167c2"
+    },
+    {
+      "path": "app/db/effort_models.py",
+      "bytes": 2942,
+      "git_blob_sha": "30f723f22979d0022e9ddde69ad2f5b06862f5fd",
+      "sha256": "6aa28e87809832cab86faa062a05ae7d84dc0177506082eb862c122bd2f63b7c"
+    },
+    {
+      "path": "app/db/effort_schema.py",
+      "bytes": 2634,
+      "git_blob_sha": "0ed6c3685a1b415f598de56e7f1e345a97d5e2da",
+      "sha256": "652f12c88520ce5a137843a94bbefed2589008ae743b7eafa0d71df90ddd0a5b"
+    },
+    {
+      "path": "app/db/experience_models.py",
+      "bytes": 1177,
+      "git_blob_sha": "23753ffe5d498b96ba140b9a158e844c66badec3",
+      "sha256": "6756260f659e06bd92574303484409a0b78d20c4580ba6d18b8ce22799a87a48"
+    },
+    {
+      "path": "app/db/garmin_models.py",
+      "bytes": 971,
+      "git_blob_sha": "7c32a9202334e062a5f956f84f4326244d11d42d",
+      "sha256": "7c89b4504c0c86b935116e0cabadaa2a584004c4652e4d70e4735e1b2637d4fe"
+    },
+    {
+      "path": "app/db/health_reports.py",
+      "bytes": 1094,
+      "git_blob_sha": "cbd0b87167d3c4317ecbb9e5077473a34ee69da0",
+      "sha256": "1e777f8febeb78bd69b306ebaa965f40397f61e3d89d789d7714f43fd434490e"
+    },
+    {
+      "path": "app/db/history_index.py",
+      "bytes": 1216,
+      "git_blob_sha": "8f4257b6cc9e04021d7327cc846bacc2b8f75565",
+      "sha256": "a22f734bc427b11f7882a1fff7d0c298b9144250e1ce09db892695152e72e5a5"
+    },
+    {
+      "path": "app/db/iron_models.py",
+      "bytes": 2816,
+      "git_blob_sha": "8f388b05a4f8555900ea3e24be89a85ce89d8a1d",
+      "sha256": "8547d946e69cc207596faa8b66bb7923633c7e15b60bc03da2a96536cd168082"
+    },
+    {
+      "path": "app/db/migrations.py",
+      "bytes": 2533,
+      "git_blob_sha": "9bbc74901a88f37ca4b4095a14ba6b35f772ece8",
+      "sha256": "3deb78ac1387124dab0d6fc382c796075587bcc2e9b241461ca300e1da3759d0"
+    },
+    {
+      "path": "app/db/models.py",
+      "bytes": 2958,
+      "git_blob_sha": "6eaaea1238749b872f153d31fc23fc64d5940dc2",
+      "sha256": "d25a1b94ae6d8c111a18da00d25635667e817bc801776f327aa651286190e55e"
+    },
+    {
+      "path": "app/db/planning_models.py",
+      "bytes": 1041,
+      "git_blob_sha": "17bfa41558892b9b0821b8b57306128b3b160662",
+      "sha256": "818c158a50612a848c709849638922b8de36ae2ad5f7cf17708e5ccf9c91a359"
+    },
+    {
+      "path": "app/db/progress_models.py",
+      "bytes": 1412,
+      "git_blob_sha": "d4d4318bad41e4e0f71870bee3932b15d01e8b51",
+      "sha256": "f6214c84401c74051241040f080712ae1ff3639c8c2723e06c3c992fab9c0320"
+    },
+    {
+      "path": "app/db/repository.py",
+      "bytes": 11614,
+      "git_blob_sha": "f8a9b0603fc40493e6a3ffc26169d70c8688eccc",
+      "sha256": "d385658f66ceaecf1716eca32b336a86ef70fd97c29829f184fd8a0cf8dab71b"
+    },
+    {
+      "path": "app/db/review_models.py",
+      "bytes": 984,
+      "git_blob_sha": "951020a41624f280ff0613dd120b30781ade256d",
+      "sha256": "8956a5c3a57f75656f3afe897c438e7a2bf114ff88a9e1178ce20316ad151a31"
+    },
+    {
+      "path": "app/db/sync_models.py",
+      "bytes": 444,
+      "git_blob_sha": "f3c8a2ebd2f9b0b2aaeeb26fa3882e4f5ba1644a",
+      "sha256": "eca3773fea87a00ffe9b5f4721084b98c638a1a7f5dffe6807f4a7436b9ec15d"
+    },
+    {
+      "path": "app/db/training_models.py",
+      "bytes": 660,
+      "git_blob_sha": "0f46c639664c8fc2705a1c5bfb79e2cdb9f232ee",
+      "sha256": "cbb7bdfd3b9b5dc4187c36fd76aceba070484a7ad954e9900d2141a4301f0fa8"
+    },
+    {
+      "path": "app/integrations/fit.py",
+      "bytes": 2847,
+      "git_blob_sha": "33acd49db378dfcb9960ac45de27836ddf1cbe28",
+      "sha256": "776399d878099dc189474aeb37e75d1932fef8f16d83d6ddc9c1a07f13a6d202"
+    },
+    {
+      "path": "app/integrations/import_fit.py",
+      "bytes": 2404,
+      "git_blob_sha": "d920e7950a4e06b9ea266d6447ed54b789b59a0e",
+      "sha256": "ad996d2397183f0bda3bd1b54d92bfd8e42155ef8eb36b1a8fb6cf19201baef5"
+    },
+    {
+      "path": "app/integrations/intervals.py",
+      "bytes": 6897,
+      "git_blob_sha": "8c6ff8a0c5fae0898075c8c3b9b0646c680e7ced",
+      "sha256": "e62ee99c7463ff0cf0612e0dc31a86512b567c3c2acc5aa5e4d2fd39ff219e3a"
+    },
+    {
+      "path": "app/integrations/intervals_credentials.py",
+      "bytes": 3132,
+      "git_blob_sha": "5173abd9c412bf2114547715785c571ccb467fd8",
+      "sha256": "d15064ade6ddeb8f11b1f15ca01d73609de972cc6c35b265efa248187def5fc8"
+    },
+    {
+      "path": "app/integrations/strava.py",
+      "bytes": 9400,
+      "git_blob_sha": "ad597bd8a56ea653825350c92d56971653919cf4",
+      "sha256": "4e6aa458162a11c9b7a970b263b1656ce134b54ca714f3c8ab3e2fc1ae8f7293"
+    },
+    {
+      "path": "app/main.py",
+      "bytes": 4410,
+      "git_blob_sha": "5a0f86ab9159e3fb6b9b58728bf75cddee9d5c21",
+      "sha256": "e38ea8aa58031d2e22352ce6c53ca586dbfe91e4652217e862cfb1c1661503b6"
+    },
+    {
+      "path": "app/services/__init__.py",
+      "bytes": 0,
+      "git_blob_sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "app/services/_imports_test.txt",
+      "bytes": 145,
+      "git_blob_sha": "16cf0a6644305493adf6a1a53512342be7da84dd",
+      "sha256": "73322a55a56293440ee7c22fe7d3e4d562017ebd5d4e0ea869e48c7ce1efb5a6"
+    },
+    {
+      "path": "app/services/activity_detail.py",
+      "bytes": 18391,
+      "git_blob_sha": "dc02dd18ce852023ae889d8ca9544b36a0b1752f",
+      "sha256": "70ea51e1d424371c574f2533f9edd5b8115b08d6e02df66ec0724aca887968dd"
+    },
+    {
+      "path": "app/services/activity_diary.py",
+      "bytes": 6404,
+      "git_blob_sha": "5933a27c48e6c1380ceea69fd53d5de523cbd38c",
+      "sha256": "5b2f7c26cd48662eac62163d033510850829d06b343aa16dee1b2df3efae80f3"
+    },
+    {
+      "path": "app/services/activity_effort.py",
+      "bytes": 15327,
+      "git_blob_sha": "13a04a46f5504350d87912379184f618a8e84fca",
+      "sha256": "55a628d7edb6f2f32b1310cebee4b594c13364b9738f8da5e89bf44edfed8894"
+    },
+    {
+      "path": "app/services/activity_rating.py",
+      "bytes": 19023,
+      "git_blob_sha": "8c4291e6d3f7ba4c301bec0dcf64889683d3f687",
+      "sha256": "275e7e785b206d6553cec382ad416296e7b3b6be55526b90970e59071075879f"
+    },
+    {
+      "path": "app/services/adaptation.py",
+      "bytes": 1390,
+      "git_blob_sha": "ffd1851991cf44dd8f6f545ae34dfab2040b8415",
+      "sha256": "24b19095b1fb7a3f532b968ef40bb67aae87947576dca5cdf892bd5115e4d111"
+    },
+    {
+      "path": "app/services/analysis.py",
+      "bytes": 1780,
+      "git_blob_sha": "4539a196810cd6445e83040b87ebf2830e53e045",
+      "sha256": "45e1d6badc1233dfff30527690fd5bf1d65c2752fd16acb658eafaaa12347ace"
+    },
+    {
+      "path": "app/services/athlete_clock.py",
+      "bytes": 1728,
+      "git_blob_sha": "fe2daa919ce0ac7fadf6b27cdd4be4b2d3a5bd7f",
+      "sha256": "7d60eb299191b73c34bd63fbcdb7fd8e553818c705c4f1365d4588e82fe518cd"
+    },
+    {
+      "path": "app/services/athlete_profile.py",
+      "bytes": 2327,
+      "git_blob_sha": "d40e3f128c99317713e65c4acc143ca31a61d083",
+      "sha256": "021d60ed4192fa7d5242f98b5e63c30c10427404eba35920a94569bbe9009a5e"
+    },
+    {
+      "path": "app/services/athlete_snapshot.py",
+      "bytes": 14996,
+      "git_blob_sha": "a8229906529a5ee216071ca4b0b92a8a4b1791a3",
+      "sha256": "f21461aa72462cf322e0f83bc4aac9cc702b92c7acd143c5d47f417123e80ada"
+    },
+    {
+      "path": "app/services/athlete_state.py",
+      "bytes": 3476,
+      "git_blob_sha": "7fbead9318dd58cd15c0be3f778c35f577f8d239",
+      "sha256": "b7983a95086c4119821dc3b220631d623a73d3f52156d034e417843d3c6c69e7"
+    },
+    {
+      "path": "app/services/backups.py",
+      "bytes": 22831,
+      "git_blob_sha": "8021d1b8c1d2be5c063b260c960c59e6734ec518",
+      "sha256": "fcd2b36f11c6eaa607c4691438a78fe6013ab454be79d8bdea4d3cf65ca70a4a"
+    },
+    {
+      "path": "app/services/body_metrics.py",
+      "bytes": 3504,
+      "git_blob_sha": "de64e7f6d9c2e40dfc925f77c541c2dcd2148ed7",
+      "sha256": "2ec1dbc6bbf6b12d50c8811183d5284faf8035f61c1efc7acca53421d7507040"
+    },
+    {
+      "path": "app/services/coach.py",
+      "bytes": 4102,
+      "git_blob_sha": "2515031c5a897147b138bb35fa32369097eec4c7",
+      "sha256": "0c032bfafe719f4cb5c43d53b663de8b94efb9e24d3d7a499aa375d99be29a9e"
+    },
+    {
+      "path": "app/services/coach_dates.py",
+      "bytes": 5391,
+      "git_blob_sha": "cb407664cfb479acebd9a6c59620260a9b2eb171",
+      "sha256": "3295a6de4d172e2705b22d8be88ae8e79516a05313f214350275008e078866d7"
+    },
+    {
+      "path": "app/services/dashboard_coach.py",
+      "bytes": 13118,
+      "git_blob_sha": "e0d7c276b8b6c76af4192d289440880a892b89d0",
+      "sha256": "49c9bb0452d581d2d43421d537b0cdf68f609e3ff9f6396aa26aac024e4a53d9"
+    },
+    {
+      "path": "app/services/decision_engine.py",
+      "bytes": 7287,
+      "git_blob_sha": "f867d0f6171ea95fb7daf776660f700c81b66eb4",
+      "sha256": "eb367e467f6c594b1b3c44fd0eb552635c40cf5ba6c78f462b2423060db13e2a"
+    },
+    {
+      "path": "app/services/distance_efforts.py",
+      "bytes": 23205,
+      "git_blob_sha": "ebb848e53b581cc8af43ab1f9599e6348e35f337",
+      "sha256": "bd2a138cda6c33e840122aac2a08cb224db1e19bae05037714b9d65d6dc9b0e1"
+    },
+    {
+      "path": "app/services/distance_records.py",
+      "bytes": 20497,
+      "git_blob_sha": "eb368a24299e968c8d48fc7cc9f23b231f1484a5",
+      "sha256": "1a41d7cb585e909f9ee4fb7b9af752b487b86a1dc9934618dc8bc3e08d22600f"
+    },
+    {
+      "path": "app/services/duplicate_review.py",
+      "bytes": 20985,
+      "git_blob_sha": "eff4045532b142fc755819c972beffaf77408d99",
+      "sha256": "d6b8347f938e911be6786967fc05261e49833139a76200ca5ed3c8b6951593ab"
+    },
+    {
+      "path": "app/services/effort_jobs.py",
+      "bytes": 13466,
+      "git_blob_sha": "b4c362c5e877595ab4b6db0eadfd49198ffc2da8",
+      "sha256": "e8ad05ca37400521cf5cae5135ce32ddb1c67e6909daff59bd10c19b5945e1e8"
+    },
+    {
+      "path": "app/services/effort_records.py",
+      "bytes": 25272,
+      "git_blob_sha": "b01fe58bd01fe167b9d05422fd02929a4a4d0cdb",
+      "sha256": "c5b2c26a38237c8f24614341e9129a7ee15d79560ddd030014f375f6f5f02fc3"
+    },
+    {
+      "path": "app/services/evaluation.py",
+      "bytes": 2853,
+      "git_blob_sha": "e110e28f29ea786a1943b91766a2cd36202301d9",
+      "sha256": "7f239a5e4732e47dfee6c497db841b9a28e67a6315d76b570447d5527ba564ed"
+    },
+    {
+      "path": "app/services/evaluation_backup.py",
+      "bytes": 2043,
+      "git_blob_sha": "4f4e0c9153f650657f43ad4d881d1b848fa7cef6",
+      "sha256": "41f291e61cd4a311327a6e762433b7497a46c4438260211ef1217c0e92c4318b"
+    },
+    {
+      "path": "app/services/execution_evidence.py",
+      "bytes": 6395,
+      "git_blob_sha": "04f7e1052e935807754e3e11e7d01f9f1b84cf7f",
+      "sha256": "089dac07f385e2ebc46593a86d745f9bd2233b9d0d3a95586d632e1afc20b707"
+    },
+    {
+      "path": "app/services/fit_export.py",
+      "bytes": 8910,
+      "git_blob_sha": "fd43889925aa52265a8acc550659bdc93425a314",
+      "sha256": "28de8d934106835ebc08a9e13e4432fd7b75ef4d52e98f777648a5184e5d4189"
+    },
+    {
+      "path": "app/services/fit_observations.py",
+      "bytes": 10369,
+      "git_blob_sha": "4396025874075a728f4077b5ef8b7bbc00de16f1",
+      "sha256": "46043f0f4a0ce10cf629ef4e001703fa21134f01e42c2b71aed25d11c458cb07"
+    },
+    {
+      "path": "app/services/garmin_delivery.py",
+      "bytes": 16218,
+      "git_blob_sha": "f5f226f9459431f7b1113a023c77d5c5912eab8c",
+      "sha256": "e59601d9c74eab3fe9487497a134a8aa19d14f7a24f032a6dd5a7cb81b9ef5e5"
+    },
+    {
+      "path": "app/services/goal_planning.py",
+      "bytes": 6056,
+      "git_blob_sha": "dbc372a86c740edae712892ea5d40e26f85385cd",
+      "sha256": "3e5b3e9cf5c8fd2aea2a891e4b3fa7b6c259a71c3b26f6fad429cdb7dbce33d6"
+    },
+    {
+      "path": "app/services/health.py",
+      "bytes": 14903,
+      "git_blob_sha": "d0bbb528d19ee555985b061a5616a07f78e5be6e",
+      "sha256": "be8c5dd494f259a37bf2574de1d92396fd6b3175daf302cc9ab754e23d35b3c0"
+    },
+    {
+      "path": "app/services/health_reports.py",
+      "bytes": 10261,
+      "git_blob_sha": "feb777ae1664cc69357c69343adb0dcc3343516a",
+      "sha256": "cc8cd43852d0c10f450c72742987842743f740f71fcac996eb0d1ccc44ad7082"
+    },
+    {
+      "path": "app/services/historical_capacity.py",
+      "bytes": 4807,
+      "git_blob_sha": "9cb3ea91058c3a353501308fb642aa253990c615",
+      "sha256": "9764b568651a4106abba1781f07cd84d95311d71ea25d2aed97893ea517a7306"
+    },
+    {
+      "path": "app/services/historical_learning.py",
+      "bytes": 8664,
+      "git_blob_sha": "e6f66d6860070c40c59b8b01273f6343e1910c2f",
+      "sha256": "a1588d6642c19a8eb322125718ddd14e4df1c867566e8b01b23e28196710ada6"
+    },
+    {
+      "path": "app/services/iron_coach.py",
+      "bytes": 9843,
+      "git_blob_sha": "e2fada0075d015f565c11c99ad0468484c3754a9",
+      "sha256": "44f14b3b4638b367f68b3637c9402fcd3271f29fc71c3153de9297d2b902531f"
+    },
+    {
+      "path": "app/services/load.py",
+      "bytes": 842,
+      "git_blob_sha": "eb45129ef24689a53416cd393bbf79c85b4fd399",
+      "sha256": "02bca76511e71499b7227d3a0887a07ccb3ef791c45b47e6af406fcf77a76e16"
+    },
+    {
+      "path": "app/services/manual_training.py",
+      "bytes": 12662,
+      "git_blob_sha": "acd3417c2c67412f3ced1da76cd2312aa58fe1d6",
+      "sha256": "fb5f4a32d7cd0928b881cd9f1aa2a2f048363fe90fcb6da6e455af08a2e7a03e"
+    },
+    {
+      "path": "app/services/matching.py",
+      "bytes": 4104,
+      "git_blob_sha": "b189f3189f79f516974dc5ffa408e5b7af1490b2",
+      "sha256": "2501732a1d68daa6e19971b26ac92626375fdcb3e7ee258745fff511db1b87e4"
+    },
+    {
+      "path": "app/services/matching_backup.py",
+      "bytes": 2346,
+      "git_blob_sha": "9bcf32e93a0df38baa8d758a7a322350e0238499",
+      "sha256": "0c8a0961a7e7636b0411ccbc75e3da65e5f77611b1897d54bdfd2a0841116d2f"
+    },
+    {
+      "path": "app/services/observed_load.py",
+      "bytes": 6948,
+      "git_blob_sha": "6b54032662db8e9fe5129f515f50becc1b7fe538",
+      "sha256": "d7a3c6febf08ba3c6ef5a4202d60e593bb81a3c6bfa5c9578bd1a002a1ea1f90"
+    },
+    {
+      "path": "app/services/planning.py",
+      "bytes": 68278,
+      "git_blob_sha": "efda17326d981476cc3223e17028691565cf7428",
+      "sha256": "fd38c96a32f8412cad6f967ec28007910e8983c0b76b16fade62732353713625"
+    },
+    {
+      "path": "app/services/power_duration.py",
+      "bytes": 15816,
+      "git_blob_sha": "cf9983321584505ae332dc533f3954e55993000a",
+      "sha256": "99409a485ff27a1789eb32f553c8c5187fbd1734d046c43d4334aeb17f7fd7d4"
+    },
+    {
+      "path": "app/services/progress.py",
+      "bytes": 21541,
+      "git_blob_sha": "4bd01daa495d094d7a5fdddc1dc4f6b32cb2b937",
+      "sha256": "0274fd8622bdfe1cc11adfcb19df20b93b460be6313ae185f914e46b19b99e4d"
+    },
+    {
+      "path": "app/services/race_gap.py",
+      "bytes": 3828,
+      "git_blob_sha": "a45188dcfb09df5ff0a0e6fe079c239a37b9013d",
+      "sha256": "f940ffd755a5f5dfe18a3a4b153d67e616038165c0d74c405c28e2a82af62023"
+    },
+    {
+      "path": "app/services/rating_history.py",
+      "bytes": 10207,
+      "git_blob_sha": "f26789cfaacbadea2cd6d634499dc6c75bc46019",
+      "sha256": "894450e1b6f6a65400b37aeb5e72ff7ea459fac782c3ba047a6e3d3b7cba95eb"
+    },
+    {
+      "path": "app/services/readiness.py",
+      "bytes": 3033,
+      "git_blob_sha": "7b6a375605bda39d98ef53d81260682c9a41ab02",
+      "sha256": "99e88765666baa7f78aabaf845e95b60612feb21a3c3d9d8f696bab6479a7812"
+    },
+    {
+      "path": "app/services/sync_jobs.py",
+      "bytes": 8911,
+      "git_blob_sha": "f470b5106f899b2b40478695b932eb1646049fc7",
+      "sha256": "5b2374ebcc14bcbe4ad8a76ac1c6f7f0e2d567c228dc83d6514d26a1c7a1430e"
+    },
+    {
+      "path": "app/services/time_constraints.py",
+      "bytes": 13982,
+      "git_blob_sha": "5ab18a86e5daf74ca4218d3753596ae9977c7d5e",
+      "sha256": "35fc8991f62af544de6d1682fe973bc4cdc42288a77ff7b7f5407e027b2673b6"
+    },
+    {
+      "path": "app/services/training_insights.py",
+      "bytes": 15212,
+      "git_blob_sha": "9da61785217ce82ffa4a43056d7d2100f11143e9",
+      "sha256": "ae01ffef26fe0cd2f8a24a7fdaab6f1292d9388c14a5b7bed356e3daa7151fdd"
+    },
+    {
+      "path": "app/services/training_load.py",
+      "bytes": 10796,
+      "git_blob_sha": "35466e14823a8f299376c3981c5add9644d76870",
+      "sha256": "4b9951a85c88e1a248e9e16d46fb2aa333e684360683dd794936a3e061c86bff"
+    },
+    {
+      "path": "app/services/training_response.py",
+      "bytes": 17305,
+      "git_blob_sha": "2a9351e09196aa5385dc2d153c0fcb3bf8b8b6e9",
+      "sha256": "6433d0ce60f82be9062607e820444b51daa90c97775c37cfd173bc5daf04c88e"
+    },
+    {
+      "path": "app/services/workout_engine.py",
+      "bytes": 7306,
+      "git_blob_sha": "da23c68e2754340a9335bc5a85f6f04639a8975f",
+      "sha256": "0e00ebd26acaf3b57798d41ac325e7e9b23245dc744cd5a5840fb78a8e28d89a"
+    },
+    {
+      "path": "app/services/workout_engine_backup.py",
+      "bytes": 3679,
+      "git_blob_sha": "90f20e74be38e747179a022601bdbdfbdd26ea3f",
+      "sha256": "7ceeefc3f9e14f2e48d3d9205c8a21cc9ffb2e858d934dd8ad21585e5eef5e4c"
+    },
+    {
+      "path": "app/services/workout_matching.py",
+      "bytes": 7282,
+      "git_blob_sha": "a6d20ea29991c647502f172c42b99c60a3232ccb",
+      "sha256": "d0a48f88552ca42585eaa982cfe1a0acc8d17d8370fac1cf4baf563c0c3e7013"
+    },
+    {
+      "path": "app/web_launcher.py",
+      "bytes": 1670,
+      "git_blob_sha": "c798717c0e83ac71da5c2b123b1fd92ebd8f3342",
+      "sha256": "e07dfa6f46ed4cd69de6e70ea7a5a4cbdc4cd3f07ec9ad0dc4de1a3cbf6263b6"
+    },
+    {
+      "path": "backup/2026-10-24/README.md",
+      "bytes": 1539,
+      "git_blob_sha": "7f108648f19f490e3e8e8861c6caff14273613c1",
+      "sha256": "f418c3f471e6b32c3e63e1a1b5d773b830a2f4832cff3bf810c7562bfe83ac61"
+    },
+    {
+      "path": "backup/2026-10-24/external-launcher/Apri_Iron_Coach.bat",
+      "bytes": 50,
+      "git_blob_sha": "01bfe2c1204d8b8d4247046ae68f8ae61a21e1c9",
+      "sha256": "bc2b2cd77970d3ec4438d62343fa2a2832d113c374f50ee01cf1340f37a43018"
+    },
+    {
+      "path": "compose.yaml",
+      "bytes": 985,
+      "git_blob_sha": "61e7998a0535445e81cb42c6fe722c899c12473e",
+      "sha256": "0ab5f3fe9d574b34efbf508947513360aa03a191b82e9a464384d78c07ffc1a0"
+    },
+    {
+      "path": "deploy/Caddyfile",
+      "bytes": 100,
+      "git_blob_sha": "c35e6a60e013dff72e4781776bb9514e8b1ce095",
+      "sha256": "5951a5a97bdd6b68fd5c9ce9e7db8435f31f381bba6e64e067cff626dc3c6461"
+    },
+    {
+      "path": "desktop/api_client.py",
+      "bytes": 2993,
+      "git_blob_sha": "c5cd00326e3e2a7fd34868683b86ad05c6fbc54d",
+      "sha256": "d62d0b4b47ac21e342cdd865b59056cde6ba985866503b7e573708d3f6e0e8e4"
+    },
+    {
+      "path": "desktop/main.py",
+      "bytes": 4483,
+      "git_blob_sha": "d6fa413e768709f73915dd11f6f1efb8bbef9782",
+      "sha256": "79307c6eedecff441f8d028e8b81478204830e243819ec8a2ba8d2d638507cb4"
+    },
+    {
+      "path": "desktop/ui/activities.py",
+      "bytes": 3677,
+      "git_blob_sha": "3d8bddb90d0cfc7e1ad6c8d0aa4eadbd4291c026",
+      "sha256": "044c2016adc18731445e1d7354dff0dd5ab4d4d171513a4b160321539580efe5"
+    },
+    {
+      "path": "desktop/ui/analysis.py",
+      "bytes": 2451,
+      "git_blob_sha": "3c6a8087712c59b34c701f55471302931d44fc7d",
+      "sha256": "0626ede455b9c985d88e7abf8f06927fd771c58097b269fbe4a03e081faeafaf"
+    },
+    {
+      "path": "desktop/ui/base.py",
+      "bytes": 1241,
+      "git_blob_sha": "a6566d167d5c42e619d6b701115e85f2fa6cab90",
+      "sha256": "14f4f0a76cbfbfa1fbde8bbd062942e680a7aa9164bb06222848ec3fff7b3db1"
+    },
+    {
+      "path": "desktop/ui/chart.py",
+      "bytes": 1340,
+      "git_blob_sha": "262161eff2140479f977396f39b3975de9a95671",
+      "sha256": "e8ab2a63d52901d839a4bc1f2fcae306c9c8877cc5327326f674da50e3f3bc67"
+    },
+    {
+      "path": "desktop/ui/coach.py",
+      "bytes": 5243,
+      "git_blob_sha": "4881fdf3ddca7ed72783aff52cdaba28cdb74915",
+      "sha256": "b7b953d9e039d93a1774d00c337bd2892f84d1b72f7aad6c7c36aa1d7f5c395e"
+    },
+    {
+      "path": "desktop/ui/dashboard.py",
+      "bytes": 2755,
+      "git_blob_sha": "1a0da355b0859acbc65a4468763e87fd2516eb2d",
+      "sha256": "db96845e02d28b9d9dc5b68f2b3f597c14b4822c65a0636bb33f7eaad3215cd7"
+    },
+    {
+      "path": "desktop/ui/fitness.py",
+      "bytes": 1721,
+      "git_blob_sha": "4568c48df21b28251daaf8d956e526cfbb1e4570",
+      "sha256": "fbab1eff66474a23faf543a614ab69ca03b05379224a7be862a769909649e9cb"
+    },
+    {
+      "path": "desktop/ui/history.py",
+      "bytes": 2137,
+      "git_blob_sha": "b71b8d896cdd54f736b3883e5b7d2bd3778ee2a6",
+      "sha256": "1a0171bebf351ccbd5b20f6f983f5b3f4df51ca8c8eb52ea7f71725183471fc4"
+    },
+    {
+      "path": "desktop/ui/profile.py",
+      "bytes": 2897,
+      "git_blob_sha": "9047ffc0447a76c0e23e67692d31b90bb95464b9",
+      "sha256": "31dac8f68850c7cc60f176fac52ce6a09f92c997192020eee2087a424c8b33b0"
+    },
+    {
+      "path": "desktop/ui/settings.py",
+      "bytes": 2083,
+      "git_blob_sha": "d94fc0edb758ac799fea267fd3cd22424b9d35db",
+      "sha256": "8ff6057431daa67ae2af4074745f328bf5a260d4755e5ef8c41135299d2b5279"
+    },
+    {
+      "path": "docs/ACTIVITY_EFFORT_2026_10_22.md",
+      "bytes": 7263,
+      "git_blob_sha": "569ee2dc0d3fe3aff7e95d20e4ab5a8d807a92e0",
+      "sha256": "cec0c9758aa70264d83d8a41c84cba7afc1785245d7d2e7642ca54971ea4854f"
+    },
+    {
+      "path": "docs/APP_AUDIT_2026_10_19.md",
+      "bytes": 17857,
+      "git_blob_sha": "c5c0b447ed1873bda64c455878cefdb56d5953aa",
+      "sha256": "d7f65c28e597fa4ba68569fa38adc3534fcee32015d955c9e989b3e80d97ae60"
+    },
+    {
+      "path": "docs/ATTIVITA_PESO_PALESTRA_2026_10_18.md",
+      "bytes": 2258,
+      "git_blob_sha": "4d67b5cbeb03bb5a3ddf7974fd268ee3f079d863",
+      "sha256": "51515653fa7106aa40ffcd0b33579bd2d07ca8a6f926e532fd90161e73883c89"
+    },
+    {
+      "path": "docs/COACH_CONTESTUALE_2026_10_18.md",
+      "bytes": 2180,
+      "git_blob_sha": "6a2cb1501b025198ad0f1191e2a4c226126457b7",
+      "sha256": "b0d0849654d9f8ee58142d9fbc446c34d13bca4baea0b1e5d0bb16eaf4e7d6b4"
+    },
+    {
+      "path": "docs/COACH_PAUSE_DISCIPLINE_2026_10_18.md",
+      "bytes": 3716,
+      "git_blob_sha": "4ed2ce1dbe85422bc82d34491ff1e3ca64b8636c",
+      "sha256": "8742c06a6215bc5c0a5578b0215e9ad73f64fc1431f570266be86758fee588b1"
+    },
+    {
+      "path": "docs/COACH_SYNC_2026_10_18.md",
+      "bytes": 3290,
+      "git_blob_sha": "c8de61804b65cf499bae709a55cf811aec90a92e",
+      "sha256": "8047204c4dfc31e7fa2dbd08edd7c4d9beaf155adb2d61d81da44d7fbb057afd"
+    },
+    {
+      "path": "docs/COMMERCIAL_BETA.md",
+      "bytes": 10086,
+      "git_blob_sha": "72eb52f9f8dd2d4b8d3900ee1bafcaf39f78c6a3",
+      "sha256": "173e6d5b163c25455a113e36444698430a098f20bc0ede537e07a993f4038fc2"
+    },
+    {
+      "path": "docs/DUPLICATE_REVIEW_2026_10_19.md",
+      "bytes": 4248,
+      "git_blob_sha": "8d325faf97148a8f8545419fc7d06ab8e9ddd685",
+      "sha256": "a3f417a019292f865e77f4915db414f1de3e6d6770549ced5b87933ba1e2baf6"
+    },
+    {
+      "path": "docs/GRAFICI_E_DISPONIBILITA_2026_10_18.md",
+      "bytes": 5069,
+      "git_blob_sha": "8c5e233f5806dfe825248614020ab017f1c15b18",
+      "sha256": "0956c33d07dcc46e88701632dc01d4fc62e2f05b4eb37daae589ffcac6071b96"
+    },
+    {
+      "path": "docs/HISTORICAL_POWER_RECORDS_2026_10_23.md",
+      "bytes": 6128,
+      "git_blob_sha": "97414b3c80d7c63214a8addbbfa88a9c0a7dc747",
+      "sha256": "81a1c9166206a376263828301c8ec9d0965856ef12f9d41bd7705d30fe5627a8"
+    },
+    {
+      "path": "docs/HISTORY_PERFORMANCE_2026_10_22.md",
+      "bytes": 6138,
+      "git_blob_sha": "3ef44925572367b584144c9106a9099e5e62ae42",
+      "sha256": "634f3ffce83aaed113db7691e52ab7dc88182c2b14967def7a6f237afcf81c0c"
+    },
+    {
+      "path": "docs/HOME_2026_10_18.md",
+      "bytes": 2219,
+      "git_blob_sha": "169333d560eee2d776d146c3523dfd8cc87984de",
+      "sha256": "bb42878354f5243302a653a27907e7e063e7be244555c05e8b985e93eff25bb0"
+    },
+    {
+      "path": "docs/IMC_2026_10_18.md",
+      "bytes": 1958,
+      "git_blob_sha": "cff73dcf41d05a7d4ce771588536a2d09b226817",
+      "sha256": "10d0c0cd55452facd29ff27079f88bcf02299da86a9cbaadfac8b6bc0766a0f2"
+    },
+    {
+      "path": "docs/IRON_COACH.md",
+      "bytes": 40398,
+      "git_blob_sha": "9f95233a166174eabac020f01c26cd9408d3d33f",
+      "sha256": "440bdcd742a5867c272ec49c1dcc69b934b27aefe746d600fe733502b78f03a2"
+    },
+    {
+      "path": "docs/OBSERVED_HISTORY_2026_10_22.md",
+      "bytes": 7315,
+      "git_blob_sha": "11dee68bb86662dfd4a3c9731df502893af52fe5",
+      "sha256": "fdd6b09ba85632e0500b67945fd967cd79f811e016d997108f02b04e6a96518b"
+    },
+    {
+      "path": "docs/PLAN_EXECUTION_2026_10_22.md",
+      "bytes": 5956,
+      "git_blob_sha": "779394c082746e91a66c0af9a5ab643e223be2ce",
+      "sha256": "9f972027007de507b16346b0d3e3121b66edd8afbb397273342efd408587cb4f"
+    },
+    {
+      "path": "docs/POWER_DURATION_2026_10_23.md",
+      "bytes": 5394,
+      "git_blob_sha": "435efe7e27a60de0cf612a0089110355dc7d80c1",
+      "sha256": "52ff40fac0c35d9655fb82e73029e8bab1eb1dcb54e8505a80cb6f74affb4f94"
+    },
+    {
+      "path": "docs/REQUIREMENTS_STATUS_2026_10_23.md",
+      "bytes": 7581,
+      "git_blob_sha": "f3e0fe86256457d1749be94e02500b654527bf79",
+      "sha256": "d87cdf94b0bfa30180216ad09194486835fdd33d799172e260a05ae5421dac16"
+    },
+    {
+      "path": "docs/REVISIONE_USABILITA_2026_10_18.md",
+      "bytes": 2197,
+      "git_blob_sha": "dfad6eeb98728e6c9c19779faede911c4a80b547",
+      "sha256": "6db2747a6d886bcb079ecdf329b7414fcc28441a157853517f328150d4d28c51"
+    },
+    {
+      "path": "docs/TRAINING_RESPONSE_2026_10_19.md",
+      "bytes": 5531,
+      "git_blob_sha": "23997a3e7b288a3b4abad5644aaf7d80e15ad134",
+      "sha256": "9f847f16c8aff042afffbb9ca6ad85cc58b3378576275bd1e9c95fef450d1ecb"
+    },
+    {
+      "path": "docs/VERIFICA_1_3.md",
+      "bytes": 5636,
+      "git_blob_sha": "1c7333ecdf504db803ee3a537dc1fec1d4186242",
+      "sha256": "876c8a07aa4d9bc52aee1c6a93c5d51be75caa291ecee55962bb94ab9effc9a9"
+    },
+    {
+      "path": "docs/runtime-sbom.json",
+      "bytes": 5128,
+      "git_blob_sha": "e1d296f24b4115f10e50f7418e1c600237af2337",
+      "sha256": "d77c9b369dac247396d44add6f6d8fd6746c04f83caf77e74a255f4eb7688384"
+    },
+    {
+      "path": "ios/README.md",
+      "bytes": 2260,
+      "git_blob_sha": "529fdd859ba7829bfa873964e504942a45e37d87",
+      "sha256": "377fbac3efe6aa8288efe7c645460c99706aa7de26a133376144fc6dbb524446"
+    },
+    {
+      "path": "ios/Sources/CoachStore.swift",
+      "bytes": 4561,
+      "git_blob_sha": "a9d8db55feec410155ba689a56601425506f1ea8",
+      "sha256": "0eb4d7cea6098d42101f59cd638f56b8fb9178d5f5a1b66ca4870c6e4743ca58"
+    },
+    {
+      "path": "ios/Sources/IronmanCoachApp.swift",
+      "bytes": 7507,
+      "git_blob_sha": "0537c87b1e071415e931be89a815441688264922",
+      "sha256": "0dc47190765d1ca82e96a877302e32aafea6da184ef0f878f1c2887643681fb0"
+    },
+    {
+      "path": "ios/Sources/Models.swift",
+      "bytes": 1423,
+      "git_blob_sha": "ca81842fdcb584df0c1badebe7033d9498596fa3",
+      "sha256": "805554a0ec113a627d62fd814847483f0c6e77b0554f6257499c73dee7778627"
+    },
+    {
+      "path": "ios/project.yml",
+      "bytes": 614,
+      "git_blob_sha": "d836090c8235f8f52eec40a90f8d720af6f49e8b",
+      "sha256": "28ef81bdd6d149f1ffe5460fe2d7fb1cc75a4ad9fbeb95215b3206c92fa680f9"
+    },
+    {
+      "path": "requirements-dev.txt",
+      "bytes": 56,
+      "git_blob_sha": "c0f63f2d3bf3212918a6b6294e0670be57a86b12",
+      "sha256": "adc39ea761ff4f997872386bd48bd61527945982db4b21ae4c8326d1ed7b01fb"
+    },
+    {
+      "path": "requirements-web.lock",
+      "bytes": 632,
+      "git_blob_sha": "4c30777fcd78033a06abc4f68f7ac2a129e24746",
+      "sha256": "a152ba143bb55b9a341c88e155083798c34a330964b055d4083965ddaa9b5a79"
+    },
+    {
+      "path": "requirements-web.txt",
+      "bytes": 171,
+      "git_blob_sha": "0335920858de52109a011d873b72285929890e41",
+      "sha256": "f9bb20fea3a86dae1244b79a1b2a9516a898cca3a3e340492811e10501a65805"
+    },
+    {
+      "path": "requirements.txt",
+      "bytes": 204,
+      "git_blob_sha": "069e486b5c079bbda49613e4f14fb5cc345f0d39",
+      "sha256": "57799b8928e7c9bc64baa3e95faa15bd63173109a6f35117fbfe8764d3343124"
+    },
+    {
+      "path": "tests/smoke_container.py",
+      "bytes": 5284,
+      "git_blob_sha": "b426ec1a75019c60c5e715d23f5a8321c557823b",
+      "sha256": "a9bebf8b6a36d9925a81550926fa5c8bcf7a90a711458256af68c4260df1f4f0"
+    },
+    {
+      "path": "tests/test_activity_detail.py",
+      "bytes": 17948,
+      "git_blob_sha": "4f316abd74fae8fb27579bef31cd0a2402b6f44a",
+      "sha256": "81fe7fbcff687634d88ca199e5abdea0be15103ce05a886a76eee121a9e18975"
+    },
+    {
+      "path": "tests/test_activity_diary.py",
+      "bytes": 13292,
+      "git_blob_sha": "a6ed96f9bfcca65e22b72ac6c7f7d19e4b0b320d",
+      "sha256": "0bf5365eecb9068fbcfc200c93db2182e86918b4ce681e527a81ed1685a52587"
+    },
+    {
+      "path": "tests/test_activity_effort.py",
+      "bytes": 7538,
+      "git_blob_sha": "79f4e74b950a3e71f3cea84f0a51afeb2395eda0",
+      "sha256": "c76d0cabc91c04f005fc836b2e6a72a13c8088c8b092d17301afa18355add97f"
+    },
+    {
+      "path": "tests/test_activity_rating.py",
+      "bytes": 7014,
+      "git_blob_sha": "1ae15f133d81b7ba48d72e35ad31deedaf8241d8",
+      "sha256": "ffa06c682f81585f541e2009020af22677033b1d5bd9284c246f7cdcecc92aa9"
+    },
+    {
+      "path": "tests/test_api_validation.py",
+      "bytes": 5680,
+      "git_blob_sha": "6273a0ba58da21c6fb9a4e412aa1eba21df133c1",
+      "sha256": "d46442a46bc08e5d5790effd0d4a8a8a24db0f947199f1b18e5eda93503236d1"
+    },
+    {
+      "path": "tests/test_application.py",
+      "bytes": 4509,
+      "git_blob_sha": "66503e08079e6d3654768abc44aff1b46b7936e7",
+      "sha256": "f0d37915f615f3f9ba1cd2d786afc0bbbce21afcbea3c709311a4621806db543"
+    },
+    {
+      "path": "tests/test_athlete_clock.py",
+      "bytes": 5029,
+      "git_blob_sha": "abe55e6333c9b10ff757f5b1dbc6ac60153b87c6",
+      "sha256": "e385c492f65e81d58515adaa8dbd4df576ac57cd97e6e6926077de7f4dbc9a71"
+    },
+    {
+      "path": "tests/test_backups.py",
+      "bytes": 22413,
+      "git_blob_sha": "bd440a9ed8b6158e96f11061388ecf94713f330b",
+      "sha256": "c78439bf306bc5c8eecdacc0c54c07a5e4e8c2db7d10489f402fd669645566dd"
+    },
+    {
+      "path": "tests/test_body_metrics.py",
+      "bytes": 5643,
+      "git_blob_sha": "a3cc98fba2d863fbac05c4211c5952abbd98f630",
+      "sha256": "7d7043c9195af2caaf2e9f01878cda8794e5e2e11089eebc800116142cc42e6c"
+    },
+    {
+      "path": "tests/test_commercial.py",
+      "bytes": 22497,
+      "git_blob_sha": "ef5d012ab2cdd122dacd3e44780b906908271715",
+      "sha256": "a2c481166f5e30aab1ac89b2659a8018fbd79005dbea53331a709e10ecd5ed00"
+    },
+    {
+      "path": "tests/test_dashboard_coach.py",
+      "bytes": 4597,
+      "git_blob_sha": "0984f5ca4d26bcb73459eb84ca2979ad8adf5771",
+      "sha256": "dda0c1dcdc8ff3b064f192a4329efae61fe8b9ab4066bc09803634920eea4b5f"
+    },
+    {
+      "path": "tests/test_decision_engine.py",
+      "bytes": 1859,
+      "git_blob_sha": "71b6d53ee0c04616a749505f1eb6f3fe19e7faef",
+      "sha256": "d3158d4581ab82f6867c4526836ad25d00c2f88e2b8f57dcdf236151e23e4831"
+    },
+    {
+      "path": "tests/test_distance_efforts.py",
+      "bytes": 10952,
+      "git_blob_sha": "05669edafc0b5a68ffbaa24063b2a51548049d28",
+      "sha256": "43e13f29418e7c05daf3717ec31cd43bb123456c6217fbdd2270a0fd5e733eea"
+    },
+    {
+      "path": "tests/test_duplicate_migration.py",
+      "bytes": 2697,
+      "git_blob_sha": "9e062b360d08baaa701357d80b2358742acec4de",
+      "sha256": "9c811cc99f12775346551bd816bd7fc7e655ec7fcd0b579d33abca04bc9f1245"
+    },
+    {
+      "path": "tests/test_duplicate_review.py",
+      "bytes": 22539,
+      "git_blob_sha": "cc0af73af075256c258c76e915ec0cb6085ed0af",
+      "sha256": "2056a5d22726af82c9d5af722d32788817d8e01e7b4fb005691bbc2e1ece7667"
+    },
+    {
+      "path": "tests/test_duplicate_scan.py",
+      "bytes": 15829,
+      "git_blob_sha": "2bfaebb90a6bf16b1ef02f95ea57f2b36d07ab6f",
+      "sha256": "4b23a621aa5958226c10b03f784d411c8d33750364a4d66f618e15c2b2c0d9fa"
+    },
+    {
+      "path": "tests/test_effort_jobs_review.py",
+      "bytes": 14046,
+      "git_blob_sha": "e7674d4cc7d04005996167c659283f6b77749010",
+      "sha256": "19fe8c711717557723f726bddd4dba3fa51a1e4aa4b9888d64993d7f0aac6c7c"
+    },
+    {
+      "path": "tests/test_effort_records.py",
+      "bytes": 20251,
+      "git_blob_sha": "05699afd7c39041f42906de430aa48436508e862",
+      "sha256": "743ea1a4dc80b8fef07ba0f7f84d105610a48aaf962ada5a2b58986b1f1a0344"
+    },
+    {
+      "path": "tests/test_effort_records_api.py",
+      "bytes": 4338,
+      "git_blob_sha": "b58337c3077cd326584d5f1449656351f4f456e0",
+      "sha256": "9a4f0e9095258a8931a17f0eb82e180f43caee1ecba125e20ad21a255abbd8a8"
+    },
+    {
+      "path": "tests/test_effort_schema.py",
+      "bytes": 7002,
+      "git_blob_sha": "6dff793bfedd7a6fc751679dfcb34c2a390bafd1",
+      "sha256": "7a3360a5cbfe463de640d4a2219823875073314a36fa27298bff153961eefdc4"
+    },
+    {
+      "path": "tests/test_execution_evidence.py",
+      "bytes": 11697,
+      "git_blob_sha": "2523b1aed3c86cf86f16edcded89ab5849380192",
+      "sha256": "dff2d56c5f801246da004a04e53d6d93d5b5d597b2ebc630cb7ad3b216227cf1"
+    },
+    {
+      "path": "tests/test_experience.py",
+      "bytes": 16268,
+      "git_blob_sha": "7a314a5911d69049e20c254e140a3812ad034579",
+      "sha256": "74145163f1c02cf765e2340da07a1c9615a7a60ddf3abee22f656c8a1d53b7e5"
+    },
+    {
+      "path": "tests/test_feedback_planning_evidence.py",
+      "bytes": 11970,
+      "git_blob_sha": "850f3123f65cd3563cfc7421453cb9ef118c8b97",
+      "sha256": "3d64ca70bde291b79b05ef255fc76912d846d5de90720e21b48dc7695c8d8eed"
+    },
+    {
+      "path": "tests/test_fit_export.py",
+      "bytes": 11280,
+      "git_blob_sha": "3a713f90cff0d3a246e551d047ec0db445fac217",
+      "sha256": "15e919a68e89359654280310c1da7fc491eb38e8f24aa816f4c25dd0e1539d2f"
+    },
+    {
+      "path": "tests/test_fit_import.py",
+      "bytes": 3002,
+      "git_blob_sha": "c8524a8c26ecfd605739c246ff92d71fd5b9c999",
+      "sha256": "0fe83d4d624ecd3407c46a139b8d972e120e77ad6839083577efa45b51b92539"
+    },
+    {
+      "path": "tests/test_fit_observations.py",
+      "bytes": 10683,
+      "git_blob_sha": "500c1dbbdfb4442e504178c8f59cf2c14f704e2c",
+      "sha256": "7947d018bdd4a346a527e26a5039cdf07e0dbf41bbcc3759ff2799baf8b92b14"
+    },
+    {
+      "path": "tests/test_garmin_delivery.py",
+      "bytes": 8326,
+      "git_blob_sha": "46ba8cb9208cc1a353f5af9422e5c96a36735086",
+      "sha256": "99f43cf44c6f8b0ccc5686dad5a9097beded4bb18ccb5a5b9c2af959537aa400"
+    },
+    {
+      "path": "tests/test_goal_planning.py",
+      "bytes": 18886,
+      "git_blob_sha": "4e0b87797c4948b6ce25cd089c7753b5f1af60a6",
+      "sha256": "d67481485662919b273dab158631d029eb21a12a63e198a5e0ef58d228a12e8d"
+    },
+    {
+      "path": "tests/test_health_report_integration.py",
+      "bytes": 7030,
+      "git_blob_sha": "7254db50ef6916127f3d3ee19b109dfb3471f9d1",
+      "sha256": "97a5e6a9f9bca5be58ac704d2746e1deefed2896814e12f244064c37fa8b0657"
+    },
+    {
+      "path": "tests/test_health_reports.py",
+      "bytes": 14484,
+      "git_blob_sha": "3dd2e48d733124594f433acdbf620561c19dd509",
+      "sha256": "4d90936303888ffe4558d2538731a8271848102fdadd0fba215b95a369cd6b52"
+    },
+    {
+      "path": "tests/test_historical_learning.py",
+      "bytes": 2257,
+      "git_blob_sha": "5c7843654e45d7dd01b43a0d1425bc037a4997c4",
+      "sha256": "023e90e7b74e13970c9b515fc074ae5aa8cdf2da3071800524e3c51195fe27c4"
+    },
+    {
+      "path": "tests/test_home_history.py",
+      "bytes": 9058,
+      "git_blob_sha": "074ce430d6965f11e3a644a0f342b831bda22b54",
+      "sha256": "140b1c45c44b013ade09c201c51ff1f0e52caba8b6a5b121bc9dbf6696fa76ef"
+    },
+    {
+      "path": "tests/test_intervals_sync.py",
+      "bytes": 8424,
+      "git_blob_sha": "03be94ca565c1fde83e667e820177483548d7cd3",
+      "sha256": "6a2c40cb3311ee90a0fa1e487ebde0d389898b1039fb279bb7fcf7f10c571b48"
+    },
+    {
+      "path": "tests/test_iron_features.py",
+      "bytes": 21350,
+      "git_blob_sha": "0867019d476922da3c2eca79afbb2917fc7143ca",
+      "sha256": "63dbe3d37c6f556d0e1bc7a81eaa85d97632d3308b4c0e7bfa377626c9b8959e"
+    },
+    {
+      "path": "tests/test_iron_review.py",
+      "bytes": 17369,
+      "git_blob_sha": "98b036eb4232e9503e9e85d5ea8cbf713e9d07d1",
+      "sha256": "40a8403719cdeed2699d6fcb52d8aa044575a6e9a6e74fde38ead31ea361fd46"
+    },
+    {
+      "path": "tests/test_legacy_feedback.py",
+      "bytes": 14401,
+      "git_blob_sha": "fe6345ac5eea7c658cc97b8fb3e47c0a5acbb3d6",
+      "sha256": "321637cfc4021c4ce69516299d3e79cc49b680856df1c790640a58c3841e1a1d"
+    },
+    {
+      "path": "tests/test_load_snapshot.py",
+      "bytes": 6498,
+      "git_blob_sha": "1a3ae108d985e39d2e8afd37aad5277b9e9ca233",
+      "sha256": "c827efe24a6d43b19fd0874cfef36e7f9a1b92d05f0301ce17d7018417d95386"
+    },
+    {
+      "path": "tests/test_manual_training.py",
+      "bytes": 13172,
+      "git_blob_sha": "1c884f8a8ff9ffe3622f06b6b3a377b6f8d3b9c9",
+      "sha256": "ee64a28de35bdbbf9f1157957d88b0ad409d5ed6256821b0b23a0dfa92e56c3a"
+    },
+    {
+      "path": "tests/test_metric_reference.py",
+      "bytes": 2724,
+      "git_blob_sha": "c26c342fc6d1a65a6c8fe511871c03ce750494b6",
+      "sha256": "5789398c9fb2409f187fe5efb5fd39e54f911952e2c3dd8f1e4c49c978d84860"
+    },
+    {
+      "path": "tests/test_observed_load.py",
+      "bytes": 13288,
+      "git_blob_sha": "1bcfdc13f4efb4186244709611344307fc3e1ac2",
+      "sha256": "a9fd46486edaf4defd3a790280af3b9c3fe9ade1776b8300d6909f03116c578a"
+    },
+    {
+      "path": "tests/test_planning.py",
+      "bytes": 23363,
+      "git_blob_sha": "ce0119acf8ad43307a05a80f0dfcaf0fe737e9c3",
+      "sha256": "430d80854c0112558564ed757dc9cdf63a79bad773a3c12cce6a73b52146f642"
+    },
+    {
+      "path": "tests/test_power_duration.py",
+      "bytes": 5178,
+      "git_blob_sha": "3d7ca2073f9777126f05c6e6293a081ed1d485c7",
+      "sha256": "fc2d2b525a727eb31c8a858620a8010035d03d8da97d138a762c0080626a5b23"
+    },
+    {
+      "path": "tests/test_profile_coverage.py",
+      "bytes": 14750,
+      "git_blob_sha": "ae30c74a80d29dcf10459fc3540b38ff29580db2",
+      "sha256": "e39598e4b9540134e87e79f34ef3486e97005397a94588aecab5b01a4cf18398"
+    },
+    {
+      "path": "tests/test_profile_records.py",
+      "bytes": 10436,
+      "git_blob_sha": "573710d38e536ff91cfe5988202cde6f1fe20e71",
+      "sha256": "b4c8f0179c02fecec313fb2b1074557b1d04526d83e60a2bdd32fcdcdfbbd0fb"
+    },
+    {
+      "path": "tests/test_profile_revision.py",
+      "bytes": 6137,
+      "git_blob_sha": "7d9134cdc04818718667dcd8a146cb703352a2cf",
+      "sha256": "bc21c458a89202b1917ec3aab8e446d053d6e66189ba6539d117d1925c667455"
+    },
+    {
+      "path": "tests/test_progress.py",
+      "bytes": 23419,
+      "git_blob_sha": "ed434e8580f5a0f1caaf9ffacd405d60857a0a83",
+      "sha256": "e001d173bbcdc40d9fca8a6def4fb8880e6d06ad670bb89afabfe658dee4c23b"
+    },
+    {
+      "path": "tests/test_rating_history.py",
+      "bytes": 5135,
+      "git_blob_sha": "f7937c5f05b3fe03db23eab060a3c88ea26b3adc",
+      "sha256": "a70bf1d6be39a628d2b85a3065279dd1aa4b9a17f11b7b02accf79f413873282"
+    },
+    {
+      "path": "tests/test_recovery_signal_quality.py",
+      "bytes": 5516,
+      "git_blob_sha": "a29062f2bf03cde1785f4f15ede08e93853e2c12",
+      "sha256": "2802dacfd5c757fc03ae5997756c72287295874fe123a7539fc1fdd4af26ccc4"
+    },
+    {
+      "path": "tests/test_release_workflows.py",
+      "bytes": 13750,
+      "git_blob_sha": "cb9b265156b8e1b8306e11ad083d11174249a965",
+      "sha256": "9d97d07016bc4bad8fa23d3dde87b51369c86f76b9b6d6b330cd1fa649ee709b"
+    },
+    {
+      "path": "tests/test_strava_jobs.py",
+      "bytes": 8746,
+      "git_blob_sha": "1ff9548e7d2bd90e63c195d3bb1737adbdd621c7",
+      "sha256": "92c03c1a3cefc4b4d163143b993f6335821513065bbd542baecac44f02bc1c62"
+    },
+    {
+      "path": "tests/test_time_constraints.py",
+      "bytes": 16592,
+      "git_blob_sha": "5149c082d90846990d0c861fdd8d943534ad871d",
+      "sha256": "0d1f9e05fdbebd483bff035f7a71ac80b6b5e31ebcff61eec59333172294bb71"
+    },
+    {
+      "path": "tests/test_training_insights.py",
+      "bytes": 19048,
+      "git_blob_sha": "c5f5cccb25275b576e68290bdb6bd6c305e95b42",
+      "sha256": "b310b3ff4fb070c82b49082b45e8f4537f429ea115c3dea425705dd85feabcd9"
+    },
+    {
+      "path": "tests/test_training_response.py",
+      "bytes": 21658,
+      "git_blob_sha": "fb31bf89a48fde156003f933404e7a7f4dc31a36",
+      "sha256": "479017c5ae8c3abbc8245fb0ec73c4da3e7070e45e1b6fc496b2b15fa733b7bd"
+    },
+    {
+      "path": "tests/test_web_launcher.py",
+      "bytes": 1912,
+      "git_blob_sha": "6a1e9bb00d437e7f5ab008723ff5438cb6e547c2",
+      "sha256": "bd006547db3ebcdc813354241fab8899b0c3c265760c9e3dbf30cb3a57b3d765"
+    },
+    {
+      "path": "tests/test_workout_matching.py",
+      "bytes": 9852,
+      "git_blob_sha": "e34b7a9697f481efa5ebb7a6bc4759dfc691a30a",
+      "sha256": "0af3015881f4e2bad85a5bc37859cc5b4d3fff64e91970becd2d04ffa0c403c8"
+    },
+    {
+      "path": "web/account.js",
+      "bytes": 11877,
+      "git_blob_sha": "d1d6f7d8239ce06b04d85ab92eeb4544d4c0e948",
+      "sha256": "c9c7563f3f0609793b37319d01f24a0d15ba060b4db6a0a52a882cde1d42781f"
+    },
+    {
+      "path": "web/activity-diary.js",
+      "bytes": 8227,
+      "git_blob_sha": "2259305229d0e5630540ed34998f70e91dede339",
+      "sha256": "f2dd9bd9a97c932a06e215f9499d88647d5824b9ef545709c58e40ea5d9c0c9c"
+    },
+    {
+      "path": "web/activity-effort.js",
+      "bytes": 9169,
+      "git_blob_sha": "119f000da5150c398ecb56cc48b8ef4285d0f7d5",
+      "sha256": "36c9469b0f42ad465b42760870225974fdf41b516ae2ae4c6dfe2438913acd0d"
+    },
+    {
+      "path": "web/app.js",
+      "bytes": 122844,
+      "git_blob_sha": "f48ddae74db2f4cce5d51529c2ae73fdeab0daa4",
+      "sha256": "3878bcff55b14a8a01a2c3fedc18407714791096d49122d9ad090bd4eb96f308"
+    },
+    {
+      "path": "web/charts.js",
+      "bytes": 16687,
+      "git_blob_sha": "596b3345ffa53e9c745ebdf56c4692a85b8fef50",
+      "sha256": "eafc4143c2498c5f65ccdb539cf08cbf80080fe315834835ac810ad8f9db5fad"
+    },
+    {
+      "path": "web/distance-efforts.js",
+      "bytes": 14836,
+      "git_blob_sha": "575cc75a6e235ff1b3a68b06f936e75e499b5e92",
+      "sha256": "18ae5265bd9e529065b2ba4485753b8853e3215e5c4467e7bb3f24c113ae5640"
+    },
+    {
+      "path": "web/duplicate-review.js",
+      "bytes": 18468,
+      "git_blob_sha": "19263ff23b861adad4f17116918d5db34eeb3749",
+      "sha256": "b24ae63bbdacb249d00b0930e59458c0b182f56471c1a1530c00d8ab68ee40dd"
+    },
+    {
+      "path": "web/effort-records.js",
+      "bytes": 29436,
+      "git_blob_sha": "80767dce8ea1d802dd6614f04982325efd350fa5",
+      "sha256": "6e578717971bff9c0cc6202812f13af1813017a947253a38493b524107136ab3"
+    },
+    {
+      "path": "web/index.html",
+      "bytes": 29279,
+      "git_blob_sha": "cb4aba0cbd59f2e3d5767b8cdd6bfd266423a3f6",
+      "sha256": "f841ff7ec28c7a7b0169606d0ffeea4dced5af3a9307af9d1fe3ceacb8f1e040"
+    },
+    {
+      "path": "web/login.html",
+      "bytes": 3497,
+      "git_blob_sha": "f76e9c834f26002de9f8011b6f33b7965838b928",
+      "sha256": "145f4a949efcf71bab0f4d218ff8d28ec5d9fca107692bed73a235365feae815"
+    },
+    {
+      "path": "web/manual-training.js",
+      "bytes": 40002,
+      "git_blob_sha": "db28f07933a8e268837742122eb724a5a6cc469b",
+      "sha256": "e090ac51c357225880d650645ff75398793297ce09b14b4cbfc1814268fa0a7f"
+    },
+    {
+      "path": "web/metric-status.js",
+      "bytes": 14534,
+      "git_blob_sha": "19f28084e8e62a342f3c38f2fae909a50ef8f856",
+      "sha256": "3688b3eb72ca0eb3a033bc0151a6438953344a26e186ba2deeef06c581c5df2b"
+    },
+    {
+      "path": "web/plan-coach.js",
+      "bytes": 7046,
+      "git_blob_sha": "e7bd40c77e276d8ac3a26401ed04314cf5797ab9",
+      "sha256": "bfca940c1100e678142435009c7a56011c42dece9287e1a8bfafc7cbab9790f1"
+    },
+    {
+      "path": "web/power-duration.js",
+      "bytes": 12050,
+      "git_blob_sha": "663e905b7642dd2ad808952f77f58538aa740675",
+      "sha256": "2ca0d54cd8b38f73e83d6770ff8eccb07620ac8ca0b76b3802f550016bd06fc2"
+    },
+    {
+      "path": "web/progress.js",
+      "bytes": 22797,
+      "git_blob_sha": "27dd5eded87436a67b7ff1583c420972bda91d63",
+      "sha256": "2d995e7d284959d3ad34b6914d99b916476ff5c40affc42b79faff0edc80e983"
+    },
+    {
+      "path": "web/style.css",
+      "bytes": 109467,
+      "git_blob_sha": "2b5a0b7197af9ff46faff8f99ed9f4f58d5c2304",
+      "sha256": "afe68658ce6c121a86206a9dc6a515bcd38e857c99f4740d99eefdd0e8ce21bf"
+    },
+    {
+      "path": "web/tests/.gitignore",
+      "bytes": 20,
+      "git_blob_sha": "552f22184f212d5dc7566f5dcaf6ac9ccb2a98d5",
+      "sha256": "295aa1f18923880afebb2e08aa70a8c4f285cc52baea238b8d2864d10e45d825"
+    },
+    {
+      "path": "web/tests/account.test.cjs",
+      "bytes": 6248,
+      "git_blob_sha": "4fd0c258c65e155b24eb38b6046ef777d8a298ea",
+      "sha256": "42b5ed1c15b49b7f8d0384a2b23c2774179acfddedf3a08f16f5e0fbbff651cf"
+    },
+    {
+      "path": "web/tests/activity-detail.test.cjs",
+      "bytes": 15975,
+      "git_blob_sha": "b9a0f54216874cd2fbc44d6ec3d5bf7fad9795e5",
+      "sha256": "b5a5d29c29a0a32f97954508d78b7c7fecb4b8d1794bcd159948fe10eb964962"
+    },
+    {
+      "path": "web/tests/activity-diary.test.cjs",
+      "bytes": 14188,
+      "git_blob_sha": "d2f54cb43b07123acbab23a8a7f0c9dc2c2c202e",
+      "sha256": "810b46dadb3739b054175d14f36b6cfe4f76fd179ee0cc533a8324b223d6ebfb"
+    },
+    {
+      "path": "web/tests/activity-effort.test.cjs",
+      "bytes": 13431,
+      "git_blob_sha": "3d79603fb92915a6481e6eeae5d97537ea4e024b",
+      "sha256": "27c5ed379163391e0c7ae74f8d3d9aacc7fff8766eab2ab355f9b4fabce042ae"
+    },
+    {
+      "path": "web/tests/app.test.cjs",
+      "bytes": 76084,
+      "git_blob_sha": "d8a7ccfe79b17bbf97a792e30c237a022541f1c9",
+      "sha256": "6b9c4fe3b183954f1b4e2b1dd20e34b1db2897ee305148fb5c00e1e8d9bf8be9"
+    },
+    {
+      "path": "web/tests/charts.test.cjs",
+      "bytes": 9737,
+      "git_blob_sha": "dcebee15f0e103c3b4d9b2d3a74397c78b0ca8b8",
+      "sha256": "dbd0b70bf7d8a6d2bad1793c18511c1cab992e87f37a7e908645a12106469501"
+    },
+    {
+      "path": "web/tests/distance-efforts.test.cjs",
+      "bytes": 7763,
+      "git_blob_sha": "77d0292df9cc26cd2bed04263d65448b6ca9bcc4",
+      "sha256": "f0e2f0f5ff84957477f5b3a54d13ec7ae9c5b60be4499593d00ac8efc49f278e"
+    },
+    {
+      "path": "web/tests/duplicate-review.test.cjs",
+      "bytes": 21632,
+      "git_blob_sha": "13016e5a5e1f6ed40e2ca84caed213b24c32d82e",
+      "sha256": "e6c8d165c18216bb0c3606c0f550c25852548163400456e950e5b8ae70e4bec4"
+    },
+    {
+      "path": "web/tests/effort-records.test.cjs",
+      "bytes": 24946,
+      "git_blob_sha": "8d635e6012912e646e6519e71a454c08cad85842",
+      "sha256": "a856baf2694fe5c69b21f55c4b009b113e1def1f02ac02275848e7c526089e74"
+    },
+    {
+      "path": "web/tests/live-smoke.cjs",
+      "bytes": 12140,
+      "git_blob_sha": "ff196861f4306d100d5af4ca944fb277b3631914",
+      "sha256": "28574ac5cd5dca1e9e8e3853634a161080de6cd600cf755d914f408ac6cb7bac"
+    },
+    {
+      "path": "web/tests/manual-training.test.cjs",
+      "bytes": 18024,
+      "git_blob_sha": "f78b0e67e3dded58a077089db5c782940e7b4034",
+      "sha256": "e1d4935319ad09a1fff987fc7b31711c196a0c5e82a35f272894563b41e8a93d"
+    },
+    {
+      "path": "web/tests/metric-status.test.cjs",
+      "bytes": 16151,
+      "git_blob_sha": "eb1d761d439bc8e2aaa5743ae027e987dfce45e7",
+      "sha256": "86c684760dac7a5a7cbc66230f635902c512f7e5b69fc942d2d3bba57d8d23e2"
+    },
+    {
+      "path": "web/tests/package-lock.json",
+      "bytes": 12364,
+      "git_blob_sha": "ad928b9fcc17fac4c986746adc129a200c2d655f",
+      "sha256": "9d35a4a0a493491d868b18efc0c19832db4d1c2380b54b773843708474610b14"
+    },
+    {
+      "path": "web/tests/package.json",
+      "bytes": 774,
+      "git_blob_sha": "2f868816414a3ee43bbcf59893a23bbd28378417",
+      "sha256": "98bde0908eb7447b564e61422edb33feed5a0ccc8215cad733ad4562312c4598"
+    },
+    {
+      "path": "web/tests/plan-coach.test.cjs",
+      "bytes": 4962,
+      "git_blob_sha": "aa9a57f4ec07a4c634f3c6dfefd3572aadb47931",
+      "sha256": "59bd1f49de504b982cafc031515f7c54bf94ff88c15b6983f633bb884d3c9a6a"
+    },
+    {
+      "path": "web/tests/power-duration.test.cjs",
+      "bytes": 13596,
+      "git_blob_sha": "2d794cbfed7d469516ff793e8979fbcd0cf1fa16",
+      "sha256": "44f2ee5a76f2a20e58dedbf4641568674d8eb66bbdb5ac419349a1a90935a61d"
+    },
+    {
+      "path": "web/tests/profile-history.test.cjs",
+      "bytes": 12270,
+      "git_blob_sha": "7285bc898f826747ce936a781daf84a859d08fa6",
+      "sha256": "d066e120cadf4745a773102ed92127e8d5677c84dfd22130c4f613a9073aa8e4"
+    },
+    {
+      "path": "web/tests/progress.test.cjs",
+      "bytes": 18155,
+      "git_blob_sha": "8fe97f49c5f3f9964d0e4ccfa1fea130164d6606",
+      "sha256": "78009d21afda0288d5164f2ae43dd2a5b888acd36b330bc4c98f342af3344085"
+    },
+    {
+      "path": "web/tests/training-insights.test.cjs",
+      "bytes": 22900,
+      "git_blob_sha": "e8f075b8e113b79dcd55c6c3020f8636c41f4990",
+      "sha256": "a134f8549debc4bdd8cda5a6b04833e591f6ad52978e170f8450b679e5b64679"
+    },
+    {
+      "path": "web/tests/training-response.test.cjs",
+      "bytes": 25967,
+      "git_blob_sha": "300ba9ad21e202a1239098bdf5cdbb7d7ce7e355",
+      "sha256": "8340fd6306a880ae4fd3c90b5f4d528d91868ba6b5ee2fea1f13e7233143ab15"
+    },
+    {
+      "path": "web/tests/usability.test.cjs",
+      "bytes": 8783,
+      "git_blob_sha": "6961e6ea1bbaa55a6245395819e89233f6c820d4",
+      "sha256": "34a60b3eb09b095dac0f1e5b9955288346a74998a3044d1b0bf6b32b30dcc6ed"
+    },
+    {
+      "path": "web/tests/wellness.test.cjs",
+      "bytes": 24704,
+      "git_blob_sha": "cb0756161d5d2b2f7c19805f52a489bba385f2ae",
+      "sha256": "94fb1c3cdaad9c876eab00a32563be4c930f977836263f402a43eb07007c32c8"
+    },
+    {
+      "path": "web/tests/workout-matching.test.cjs",
+      "bytes": 15569,
+      "git_blob_sha": "0ec934a971064ebfbb5944dc6c47e6fc2d58d822",
+      "sha256": "7f190a4e4b2da4f9c3a5ac67955eb10542b5c9def66daecebf521692304acea4"
+    },
+    {
+      "path": "web/training-insights.js",
+      "bytes": 18055,
+      "git_blob_sha": "63995d58d9ce9b8df639e1a308901351fbd845d9",
+      "sha256": "c08762fc982730425173be9b017053b5bcac8f27ecab5a51b25726ed53160192"
+    },
+    {
+      "path": "web/training-response.js",
+      "bytes": 22043,
+      "git_blob_sha": "9a58b02393be5a42abefd6b52ef57177da1b73d8",
+      "sha256": "c798d522b5819994d8c04292c57bbb066565de859ec946d1ceb291ee4870138e"
+    },
+    {
+      "path": "web/usability.js",
+      "bytes": 5422,
+      "git_blob_sha": "720d7d679cd01fb3052d8fc288ceb2695aaa5fc8",
+      "sha256": "257d876e32a0815c768dc85dde45143958a0c8f97e0a6110e70fa59d43b6a016"
+    },
+    {
+      "path": "web/wellness.js",
+      "bytes": 19390,
+      "git_blob_sha": "23ff6a40d012eb9f765d875367cd0dd6feb56104",
+      "sha256": "be096a8cd07aa3dd639dae622bfa1c627d98de2a78d9d3573719a131a579c5f1"
+    },
+    {
+      "path": "web/workout-matching.js",
+      "bytes": 7166,
+      "git_blob_sha": "038d28f7250595c8b99a638bb876092bf03dc0db",
+      "sha256": "dcd9a03b3cf444290cb6d93a305571a23bbb6edd90e2178c4c4d24f75f5e693b"
+    }
+  ],
+  "secret_scan": {
+    "files": 402,
+    "hits": []
+  }
+}

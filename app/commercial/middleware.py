@@ -14,7 +14,7 @@ from app.db.database import WORKSPACE, WORKSPACE_KEY
 from app.commercial.accounts import COOKIE
 
 logger=logging.getLogger('iron.requests')
-ASSETS={'index.html','login.html','style.css','account.js','app.js','charts.js','manual-training.js','metric-status.js','plan-coach.js','progress.js','usability.js','wellness.js','training-insights.js'}
+ASSETS={'index.html','login.html','style.css','account.js','app.js','charts.js','activity-diary.js','activity-effort.js','power-duration.js','distance-efforts.js','effort-records.js','manual-training.js','metric-status.js','plan-coach.js','progress.js','usability.js','wellness.js','training-insights.js','training-response.js','duplicate-review.js','workout-matching.js'}
 PUBLIC_API={'/account/config','/account/register','/account/login','/account/forgot-password','/account/resend-verification','/account/reset-password','/account/verify','/billing/webhook','/health','/ready','/'}
 PUBLIC_FILES={'/login','/favicon.ico'}
 

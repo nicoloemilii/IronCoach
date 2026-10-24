@@ -11,6 +11,6 @@
 
 ## Verifica
 
-490 test backend e 116 test DOM/flussi superati. Due grafici SVG sintetici renderizzati in PNG e ispezionati; confronto pari valore/pari colore e opacità verificato anche automaticamente. Prova API sul server personale in sola lettura: dettaglio attività con cinque serie e 3000 punti GPS. Sincronizzazione wellness completata senza errori: 24 misure di peso nel periodo consultato. Creazione e avanzamento delle schede palestra verificati su database isolati: 66 richieste HTTP reali, zero errori HTTP/JavaScript. Verificati salvataggi consecutivi, serie persistenti, timer con pausa/riapertura/ripresa/reset e conservazione delle sedute manuali dopo la generazione. Nessuna attività fittizia creata.
+490 test backend e 116 test DOM/flussi superati. Due grafici SVG sintetici renderizzati in PNG e ispezionati; confronto pari valore/pari colore e opacità verificato anche automaticamente. Creazione e avanzamento delle schede palestra verificati su database isolati: 66 richieste HTTP reali, zero errori HTTP/JavaScript. Verificati salvataggi consecutivi, serie persistenti, timer con pausa/riapertura/ripresa/reset e conservazione delle sedute manuali dopo la generazione. Nessuna attività fittizia creata.
 
 Il layout completo nel browser e i trasferimenti fisici Garmin restano non verificati. Le schede palestra non vengono presentate come allenamenti FIT supportati dal dispositivo.

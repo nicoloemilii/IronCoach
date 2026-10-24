@@ -1,0 +1,26 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+const {JSDOM,VirtualConsole}=require('../../web/tests/node_modules/jsdom');
+const project=path.resolve(__dirname,'../..'),origin='http://127.0.0.1:8777',calls=[],errors=[],pending=new Set();
+const virtualConsole=new VirtualConsole();virtualConsole.on('jsdomError',e=>errors.push(e.stack));
+const dom=new JSDOM(fs.readFileSync(path.join(project,'web/index.html'),'utf8'),{url:origin+'/app#training',runScripts:'outside-only',virtualConsole});const w=dom.window,$=s=>w.document.querySelector(s);
+w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new w.Event('close'));};
+w.fetch=(relative,options={})=>{const url=new URL(relative,origin);assert.equal(url.origin,origin);assert.ok(!url.pathname.startsWith('/sync'));const job=fetch(url,options).then(response=>{calls.push({path:url.pathname,method:options.method||'GET',status:response.status});return response;}).finally(()=>pending.delete(job));pending.add(job);return job;};
+async function settle(){for(let n=0;n<500;n++){await new Promise(r=>setTimeout(r,25));if(!pending.size&&$('#refresh').textContent!=='Caricamento…'){await new Promise(r=>setTimeout(r,50));if(!pending.size)break;}if(n===499)throw Error('UI busy');}assert.deepEqual(errors,[]);assert.ok(!$('#notice').classList.contains('error'),$('#notice').textContent);}
+const fill=(s,v)=>{const n=$(s);assert.ok(n,s);n.value=v;n.dispatchEvent(new w.Event('input',{bubbles:true}));};
+const submit=s=>$(s).dispatchEvent(new w.Event('submit',{cancelable:true,bubbles:true}));
+const clickText=(s,text)=>{const b=[...w.document.querySelectorAll(s)].find(n=>n.textContent.includes(text));assert.ok(b,text);b.click();};
+async function get(url){const response=await fetch(origin+url);assert.ok(response.ok);return response.json();}
+(async()=>{try{
+  for(const file of ['metric-status.js','charts.js','app.js','usability.js','progress.js','wellness.js','manual-training.js','plan-coach.js'])w.eval(fs.readFileSync(path.join(project,'web',file),'utf8'));
+  await settle();const today=$('#manual-training-form [name=date]').value,end=new Date(today+'T12:00:00Z');end.setUTCDate(end.getUTCDate()+13);
+  $('.gym-template-grid button').click();assert.equal($('.gym-builder-list').children.length,3);fill('#manual-training-form [name=name]','QA Forza');submit('#manual-training-form');await settle();
+  $('.gym-library .list-row').click();await settle();$('.gym-set-check input').click();await settle();assert.match($('.gym-progress-summary').textContent,/1 \/ 6/);$('#gym-session-dialog .back-button').click();
+  fill('#manual-training-form [name=sport]','cycling');$('#manual-training-form [name=sport]').dispatchEvent(new w.Event('change'));fill('#manual-training-form [name=name]','QA Bici');fill('#manual-training-form [name=duration_min]','45');submit('#manual-training-form');await settle();
+  w.IronCoachUI.navigate('calendar');await settle();$('#plan-coach details').open=true;fill('#plan-coach-form [name=message]','Niente mattina');fill('#plan-coach-form [name=start]',today);fill('#plan-coach-form [name=end]',end.toISOString().slice(0,10));submit('#plan-coach-form');await settle();assert.match($('.coach-conversation').textContent,/Pomeriggio/);assert.equal(calls.filter(c=>c.path==='/planning/coach/apply').length,0);
+  clickText('.coach-conversation button','Applica');await settle();const current=await get('/planning/profile');assert.deepEqual(current.profile.time_constraints[0].blocked,['morning']);const week=await get('/planning/week');const sessions=week.days.flatMap(d=>d.sessions);assert.equal(sessions.length,2);assert.ok(sessions.every(s=>!s.payload.time_window.allowed.includes('morning')));
+  fill('#plan-coach-form [name=message]','Pausa dagli allenamenti');submit('#plan-coach-form');await settle();assert.match($('.coach-conversation').textContent,/2 sedute/);clickText('.coach-conversation button','Applica');await settle();const paused=await get('/planning/week');assert.ok(paused.days.filter(d=>d.date>=today).every(d=>d.available_minutes===0));assert.ok(paused.days.flatMap(d=>d.sessions).every(s=>s.payload.time_window.conflict));
+  const allRules=[...w.document.querySelectorAll('.coach-time-rule')];allRules.find(n=>n.textContent.includes('pomeriggio')).querySelector('button').click();await settle();assert.equal((await get('/planning/profile')).profile.time_constraints.length,1);
+  const activities=await get('/activities');assert.equal(activities.length,0);assert.equal(calls.filter(c=>c.status>=400).length,0);
+  const result={passed:true,source_modules:8,frontend_requests:calls.length,dom_errors:errors.length,http_errors:calls.filter(c=>c.status>=400).length,manual_workouts:2,gym_completed_sets:1,coach_preview_apply_remove:true,existing_calendar_windows_updated:true,pause_conflicts_explicit:true,activities_created:0};fs.writeFileSync(path.join(__dirname,'result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result));
+}finally{dom.window.close();}})().catch(e=>{console.error(e.stack);process.exitCode=1;});

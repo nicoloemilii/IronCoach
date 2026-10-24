@@ -123,7 +123,7 @@ def test_distribution_preserves_exact_week_boundaries(db):
     assert distribution['reason'].startswith('200 punti, riferimento 100 (+100%)')
 
 
-def test_list_rating_uses_constant_queries_for_large_history(db, monkeypatch):
+def test_list_rating_uses_bounded_batch_queries_for_large_history(db, monkeypatch):
     monkeypatch.setattr('app.services.activity_rating.utc_now_naive', lambda: NOW)
     for index in range(1118):
         activity(db, day=index, source_id=f'history-{index}')
@@ -138,7 +138,10 @@ def test_list_rating_uses_constant_queries_for_large_history(db, monkeypatch):
     finally:
         event.remove(db.bind, 'before_cursor_execute', capture)
     assert len(result) == 1118 and all(row['coach_rating']['score'] is not None for row in result)
-    assert len(statements) <= 6
+    observation_queries = [statement for statement in statements if 'FROM activity_observations' in statement]
+    assert len(observation_queries) == 3  # ceil(1118 requested IDs / 500).
+    assert all('activity_observations.activity_id IN' in statement for statement in observation_queries)
+    assert len(statements) - len(observation_queries) <= 4
     # Detail and list use the same rating, while retaining separate execution evidence.
     detail = routes_iron.activity_assessment(result[0]['id'], db=db)
     assert detail['score'] == result[0]['coach_rating']['score']

@@ -2,6 +2,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, date
 from statistics import mean
 from app.services.training_load import activity_load
+from app.services.health import usable_metric_value
 from app.services.athlete_clock import activity_day, athlete_today, as_utc_naive, utc_now_naive
 
 
@@ -14,7 +15,8 @@ def _sleep_score(hours):
 
 def calculate_daily_state(activities, metrics=None, ftp=170.0, day: date | None = None):
     now = utc_now_naive()
-    day = day or athlete_today(now); metrics = metrics or {}
+    day = day or athlete_today(now)
+    metrics = {kind: usable_metric_value(kind, value) for kind, value in (metrics or {}).items()}
     valid = [a for a in activities if getattr(a, 'start_time', None) and as_utc_naive(a.start_time) <= now]
     def on_date(a, d): return activity_day(a.start_time) == d
     d0=[a for a in valid if on_date(a,day)]; d3=[a for a in valid if day-timedelta(days=2)<=activity_day(a.start_time)<=day]; d7=[a for a in valid if day-timedelta(days=6)<=activity_day(a.start_time)<=day]

@@ -10,22 +10,31 @@ from app.db.iron_models import SchemaVersion, User, HealthMetric
 
 
 def migrate(engine):
-    from app.db import progress_models
+    from app.db import progress_models, review_models
+    from app.db.effort_schema import ensure_effort_schema
+    from app.db.history_index import ensure_history_index
     inspector = inspect(engine)
     applied = set()
     if inspector.has_table('iron_schema_versions'):
         with Session(engine) as db:
             applied = {row.version for row in db.query(SchemaVersion).all()}
-            if 2 in applied: return
+        if {1, 2, 3} <= applied:
+            ensure_effort_schema(engine)
+            ensure_history_index(engine)
+            return
     filename = engine.url.database
+    backup_created = False
     if filename and filename != ':memory:' and Path(filename).exists():
         original = Path(filename).resolve()
         folder = original.parent / 'backups'; folder.mkdir(exist_ok=True)
-        next_version = 2 if 1 in applied else 1
+        next_version = next(version for version in (1, 2, 3) if version not in applied)
         backup = folder / f'{original.stem}-before-iron-v{next_version}-{datetime.utcnow():%Y%m%d%H%M%S%f}.db'
         with closing(sqlite3.connect(str(original))) as source, closing(sqlite3.connect(str(backup))) as target:
             source.backup(target)
+        backup_created = True
+    ensure_effort_schema(engine, backup=not backup_created)
     Base.metadata.create_all(engine)
+    ensure_history_index(engine)
     from app.db.models import DailyMetrics
     from app.services.health import METRICS
     with Session(engine) as db:
@@ -38,6 +47,6 @@ def migrate(engine):
                 if value is not None and not db.query(HealthMetric).filter_by(date=row.date, kind=kind, source='manual').first():
                     db.add(HealthMetric(date=row.date, kind=kind, value=value, unit=spec['unit'],
                                         source='manual', observed_at=row.date, synced_at=now))
-        for version in (1, 2):
+        for version in (1, 2, 3):
             if version not in applied: db.add(SchemaVersion(version=version))
         db.commit()

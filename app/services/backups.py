@@ -24,7 +24,10 @@ from app.db.database import Base
 from app.db import models, experience_models, iron_models, planning_models, progress_models  # register allowlisted tables
 from app.db import health_reports  # register optional personal symptom journal
 from app.db import training_models  # register optional gym checklist progress
+from app.db.review_models import DuplicateReview  # local operational history, not portable JSON
 from app.db.garmin_models import GarminDelivery
+from app.db.effort_lock import database_lock
+from app.db.effort_models import EffortAnalysis, EffortScan, DistanceAnalysis
 
 MAX_BYTES = 20 * 1024 * 1024
 MAX_RECORDS = 100_000
@@ -92,6 +95,9 @@ def fingerprint(db):
     if inspect(db.connection()).has_table('garmin_deliveries'):
         content['_local_delivery'] = [{key: _serial(value) for key, value in row.items()}
             for row in db.execute(select(GarminDelivery.__table__).order_by(GarminDelivery.id)).mappings()]
+    if inspect(db.connection()).has_table('duplicate_reviews'):
+        content['_local_duplicate_reviews'] = [{key: _serial(value) for key, value in row.items()}
+            for row in db.execute(select(DuplicateReview.__table__).order_by(DuplicateReview.id)).mappings()]
     return hashlib.sha256(_json(content).encode('utf-8')).hexdigest()
 
 
@@ -358,7 +364,7 @@ def preview_backup(db, raw):
     return {'preview_token': token, 'expires_at': _stamp(expires), 'fingerprint': digest,
             'generated_at': payload['generated_at'], 'tables': _summary(payload['data']),
             'total_records': sum(map(len, payload['data'].values())),
-            'message': 'Il ripristino sostituirà i dati personali. Connessioni e credenziali restano sul computer; i riferimenti locali agli invii Garmin saranno rimossi. Una copia SQLite sarà conservata prima del ripristino.'}
+            'message': 'Il ripristino sostituirà i dati personali. Connessioni e credenziali restano sul computer; i riferimenti locali agli invii Garmin e la cronologia di verifica dei duplicati saranno rimossi. Il JSON non include questa cronologia. Una copia SQLite sarà conservata prima del ripristino.'}
 
 
 @contextmanager
@@ -408,7 +414,7 @@ def restore_backup(db, token):
     if db.get_bind().dialect.name != 'sqlite':
         raise HTTPException(503, 'Ripristino disponibile soltanto sul database SQLite locale.')
     try:
-        with _sync_exclusion():
+        with _sync_exclusion(), database_lock(db.get_bind()):
             db.rollback()
             with db.begin():
                 # Prevent any other SQLite writer from changing the fingerprint
@@ -427,6 +433,14 @@ def restore_backup(db, token):
                     raise HTTPException(409, 'Revisione del profilo fuori intervallo.')
                 tables = tables_for(db)
                 removed_remote = db.query(GarminDelivery).delete(synchronize_session=False)
+                cleared_reviews = (db.query(DuplicateReview).delete(synchronize_session=False)
+                    if inspect(db.connection()).has_table('duplicate_reviews') else 0)
+                available_tables = set(inspect(db.connection()).get_table_names())
+                # UUID job deletion invalidates any worker snapshot from before
+                # this restore, even if original activity rows are identical.
+                for model in (EffortAnalysis, EffortScan, DistanceAnalysis):
+                    if model.__tablename__ in available_tables:
+                        db.query(model).delete(synchronize_session=False)
                 for table in reversed(tables):
                     db.execute(table.delete())
                 for table in tables:
@@ -449,4 +463,5 @@ def restore_backup(db, token):
     return {'restored': True, 'tables': _summary(data), 'total_records': sum(map(len, data.values())),
             'backup_created': backup_created, 'profile_revision': revision,
             'removed_remote_references': removed_remote, 'reload_required': True,
-            'message': 'Dati personali ripristinati. Ricarica l’app prima di continuare. Connessioni conservate; nessun allenamento è stato pubblicato o revocato sui servizi remoti.'}
+            'cleared_review_history': cleared_reviews,
+            'message': 'Dati personali ripristinati. Ricarica l’app prima di continuare. Cronologia di verifica dei duplicati azzerata; connessioni conservate. Nessun allenamento è stato pubblicato o revocato sui servizi remoti.'}

@@ -16,6 +16,7 @@ from app.services.health import health_response
 from app.services.iron_coach import assess, overview
 from app.services.race_gap import gap_analysis
 from app.api.routes_sync import local_only
+from app.api.routes_duplicate_review import DecisionInput
 
 router = APIRouter(tags=['Iron Coach'])
 
@@ -142,7 +143,7 @@ def activity_assessment(identifier: int, db: Session = Depends(get_db)):
     if not row: raise HTTPException(404, 'Attività non trovata.')
     from app.services.activity_rating import activity_ratings
     # Keep execution adherence distinct from the rating of recorded training.
-    return {**activity_ratings(db)[identifier], 'execution_assessment': assess(db, row)}
+    return {**activity_ratings(db, target_ids={identifier})[identifier], 'execution_assessment': assess(db, row)}
 
 
 @router.get('/dashboard/home')
@@ -280,58 +281,6 @@ def scan_duplicates(limit: int = Query(10000, ge=1, le=50000), db: Session = Dep
 
 
 @router.post('/activities/duplicates/{identifier}/{decision}', dependencies=[Depends(local_only)])
-def resolve_duplicate(identifier: int, decision: Literal['merge', 'keep'], db: Session = Depends(get_db)):
-    row = db.get(DuplicateCandidate, identifier)
-    if not row or row.status != 'pending': raise HTTPException(404, 'Confronto non disponibile.')
-    if decision == 'keep':
-        row.status = 'kept'; db.commit(); return {'status': 'kept'}
-    keep = db.get(Activity, row.other_id); remove = db.get(Activity, row.activity_id)
-    if not keep or not remove: raise HTTPException(409, 'Attività non più disponibili.')
-    left = db.query(SessionFeedback).filter_by(activity_id=keep.id).first()
-    right = db.query(SessionFeedback).filter_by(activity_id=remove.id).first()
-    if left and right: raise HTTPException(409, 'Entrambe le attività hanno feedback: risolvi gli abbinamenti prima della fusione.')
-    if not db.query(ActivityIdentity).filter_by(activity_id=remove.id).first():
-        # Legacy imports may predate the identity table; retain their remote ID.
-        key = f'{remove.source}:{remove.source_id}'
-        alias = db.query(ActivityIdentity).filter_by(source_key=key).first()
-        if alias and alias.activity_id != keep.id:
-            raise HTTPException(409, 'Identità esterna già collegata a un’altra attività.')
-        if not alias: db.add(ActivityIdentity(source_key=key, activity_id=keep.id))
-
-    def remap_payload(value):
-        if isinstance(value, dict):
-            return {key: keep.id if key in ('activity_id', 'matched_activity_id') and item == remove.id
-                    else remap_payload(item) for key, item in value.items()}
-        if isinstance(value, list): return [remap_payload(item) for item in value]
-        return value
-
-    for alias in db.query(ActivityIdentity).filter_by(activity_id=remove.id): alias.activity_id = keep.id
-    for observation in db.query(ActivityObservation).filter_by(activity_id=remove.id): observation.activity_id = keep.id
-    for evaluation in db.query(WorkoutEvaluation).filter_by(activity_id=remove.id):
-        evaluation.activity_id = keep.id
-        evaluation.payload_json = json.dumps(remap_payload(json.loads(evaluation.payload_json)))
-    if right:
-        right.activity_id = keep.id
-        content = remap_payload(json.loads(right.payload_json)); content['activity_id'] = keep.id; right.payload_json = json.dumps(content)
-    for field in ('duration_seconds', 'distance_meters', 'elevation_gain_meters', 'avg_hr', 'max_hr', 'avg_power', 'normalized_power', 'avg_speed', 'avg_cadence', 'calories', 'load'):
-        if getattr(keep, field) is None: setattr(keep, field, getattr(remove, field))
-    # Preserve comparisons involving a third activity, including explicit keep
-    # decisions. Dropping those rows loses review work and future duplicate leads.
-    candidates = db.query(DuplicateCandidate).filter((DuplicateCandidate.activity_id == remove.id) | (DuplicateCandidate.other_id == remove.id)).all()
-    for candidate in candidates:
-        first = keep.id if candidate.activity_id == remove.id else candidate.activity_id
-        second = keep.id if candidate.other_id == remove.id else candidate.other_id
-        if first == second:
-            db.delete(candidate)
-            continue
-        existing = db.query(DuplicateCandidate).filter(
-            ((DuplicateCandidate.activity_id == first) & (DuplicateCandidate.other_id == second)) |
-            ((DuplicateCandidate.activity_id == second) & (DuplicateCandidate.other_id == first))).first()
-        if existing and existing.id != candidate.id:
-            if candidate.status == 'kept': existing.status = 'kept'
-            db.delete(candidate)
-        else:
-            candidate.activity_id = first; candidate.other_id = second
-    db.flush()
-    db.delete(remove); db.commit()
-    return {'status': 'merged', 'activity_id': keep.id}
+def resolve_duplicate(identifier: int, decision: Literal['merge', 'keep'], payload: DecisionInput | None = None, db: Session = Depends(get_db)):
+    from app.services.duplicate_review import resolve
+    return resolve(db, identifier, decision, payload.state_token if payload else None)

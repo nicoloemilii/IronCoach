@@ -77,7 +77,8 @@ def series(db, start, end):
     rows = db.query(HealthMetric).filter(HealthMetric.date >= str(start), HealthMetric.date <= str(end)).all()
     chosen = {}
     live_manual_days = set()
-    # Legacy manual edits remain live; imported values never overwrite them.
+    # Keep manual records intact. A non-null imported observation takes display
+    # precedence; a missing import falls back to the live manual observation.
     for row in db.query(DailyMetrics).filter(DailyMetrics.date >= str(start), DailyMetrics.date <= str(end)).all():
         live_manual_days.add(row.date)
         for kind, spec in METRICS.items():
@@ -93,12 +94,28 @@ def series(db, start, end):
     return sorted(chosen.values(), key=lambda x: (x['date'], x['kind']))
 
 
+def usable_metric_value(kind, value):
+    """Validate calculation inputs without changing the recorded observations."""
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return None
+    try:
+        if not math.isfinite(value):
+            return None
+    except OverflowError:
+        return None
+    if kind in ('hrv_ms', 'hrv_baseline_ms', 'resting_hr_bpm',
+                'resting_hr_baseline_bpm', 'weight_kg'):
+        return value if value > 0 else None
+    return value if kind == 'tsb' or value >= 0 else None
+
+
 def _baseline(points, latest):
     if not latest:
         return None
     baseline_start = str(date.fromordinal(max(1, date.fromisoformat(latest['date']).toordinal() - 28)))
     previous = [r['value'] for r in points
-                if baseline_start <= r['date'] < latest['date'] and r['source'] == latest['source']]
+                if baseline_start <= r['date'] < latest['date'] and r['source'] == latest['source']
+                and usable_metric_value(latest['kind'], r['value']) is not None]
     return round(median(previous), 2) if len(previous) >= 7 else None
 
 
@@ -124,7 +141,7 @@ def effective_metrics(db, day):
     start = date.fromordinal(max(1, day.toordinal() - 28))
     points = series(db, start, day)
     latest = {r['kind']: r for r in points if r['date'] == str(day)}
-    values = {kind: point['value'] for kind, point in latest.items()}
+    values = {kind: usable_metric_value(kind, point['value']) for kind, point in latest.items()}
     for kind, baseline_key in [('hrv_ms', 'hrv_baseline_ms'), ('resting_hr_bpm', 'resting_hr_baseline_bpm')]:
         metric = latest.get(kind)
         if metric:

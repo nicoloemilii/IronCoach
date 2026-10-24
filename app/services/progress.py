@@ -12,8 +12,9 @@ from app.db.garmin_models import GarminDelivery
 from app.db.iron_models import RaceGoal
 from app.db.models import Activity, Workout, WorkoutEvaluation
 from app.db.progress_models import GoalPreparationItem, WorkoutResolution
-from app.services.athlete_clock import activity_day, as_utc_naive, athlete_today, utc_now_naive
-from app.services.health import METRICS, series, reference_range
+from app.services.athlete_clock import activity_day, as_utc_naive, athlete_today, utc_now_naive, day_start_utc
+from app.services.execution_evidence import finite_number, usable_feedback
+from app.services.health import METRICS, series, reference_range, usable_metric_value
 from app.services.race_gap import gap_analysis
 from app.services.training_load import sport_key
 
@@ -22,14 +23,14 @@ SPORTS = {'swim': ('swimming', 'Nuoto'), 'bike': ('cycling', 'Bici'),
           'run': ('running', 'Corsa'), 'strength': ('strength', 'Forza')}
 
 
-def _number(value):
-    if isinstance(value, bool) or not isinstance(value, (float, int)):
-        return None
-    return float(value) if math.isfinite(value) else None
-
-
 def _total(values):
-    return round(sum(values), 1) if all(v is not None for v in values) else None
+    if any(value is None for value in values):
+        return None
+    try:
+        total = math.fsum(values)
+        return round(total, 1) if math.isfinite(total) else None
+    except (OverflowError, ValueError):
+        return None
 
 
 def active_resolution(db, workout_id):
@@ -67,21 +68,6 @@ def resolution_dict(row):
             'undone_at': row.undone_at.isoformat() + 'Z' if row.undone_at else None}
 
 
-def _feedback_actual(db, feedback, today, now):
-    content = json.loads(feedback.payload_json)
-    if feedback.activity_id is not None:
-        activity = db.get(Activity, feedback.activity_id)
-        if (not activity or as_utc_naive(activity.start_time) > now
-                or activity_day(activity.start_time) > today):
-            return None
-        duration = _number(activity.duration_seconds)
-        return {'minutes': duration / 60 if duration is not None else None,
-                'source': 'activity', 'activity_id': activity.id, 'content': content}
-    actual = content.get('actual') or {}
-    duration = _number(actual.get('duration_min'))
-    return {'minutes': duration, 'source': 'self_reported', 'activity_id': None, 'content': content}
-
-
 def week_progress(db, requested_start=None):
     today = athlete_today(); now = utc_now_naive()
     requested_start = requested_start or today
@@ -89,27 +75,44 @@ def week_progress(db, requested_start=None):
     end = monday + timedelta(days=6)
     workouts = db.query(Workout).filter(Workout.date >= str(monday), Workout.date <= str(end),
                                       ~Workout.status.in_(['cancelled', 'superseded'])).order_by(Workout.date, Workout.id).all()
-    activities = [a for a in db.query(Activity).all() if as_utc_naive(a.start_time) <= now
-                  and monday <= activity_day(a.start_time) <= min(today, end)]
+    ids = [row.id for row in workouts]
+    feedback_by_workout = {row.workout_id: row for row in db.query(SessionFeedback).filter(SessionFeedback.workout_id.in_(ids))}
+    resolutions = {row.workout_id: row for row in db.query(WorkoutResolution).filter(
+        WorkoutResolution.workout_id.in_(ids), WorkoutResolution.undone_at.is_(None))}
+    evaluated = {identifier for identifier, in db.query(WorkoutEvaluation.workout_id).filter(WorkoutEvaluation.workout_id.in_(ids))}
+    remote = {identifier for identifier, in db.query(GarminDelivery.workout_id).filter(
+        GarminDelivery.workout_id.in_(ids), or_(GarminDelivery.remote_published.is_(True),
+        GarminDelivery.status.in_(['queued', 'pending', 'sending', 'published', 'sent', 'unknown'])))}
+    linked_ids = [row.activity_id for row in feedback_by_workout.values() if row.activity_id is not None]
+    cutoff = min(today, end)
+    week_filter = (Activity.start_time >= day_start_utc(monday)) & (Activity.start_time < day_start_utc(cutoff + timedelta(days=1))) & (Activity.start_time <= now)
+    # The second branch retrieves only explicitly linked records, including an
+    # invalid future link so it can be explained. No full-history Python scan.
+    activity_rows = db.query(Activity).filter(or_(week_filter, Activity.id.in_(linked_ids))).all()
+    activities_by_id = {row.id: row for row in activity_rows}
+    activities = [row for row in activity_rows if as_utc_naive(row.start_time) <= now
+                  and monday <= activity_day(row.start_time) <= cutoff]
     sessions = []; adherence_values = []
     counts = dict(completed=0, modified=0, skipped=0, rest=0, unconfirmed=0, planned=0)
     for workout in workouts:
-        feedback = db.query(SessionFeedback).filter_by(workout_id=workout.id).first()
-        evidence = _feedback_actual(db, feedback, today, now) if feedback and workout.date <= str(today) else None
-        resolution = active_resolution(db, workout.id)
+        feedback = feedback_by_workout.get(workout.id)
+        checked = usable_feedback(workout, feedback, activities_by_id.get(feedback.activity_id) if feedback else None,
+                                  today=today, now=now)
+        evidence = checked if checked['usable'] else None
+        resolution = resolutions.get(workout.id)
         actual_minutes = evidence['minutes'] if evidence else None
         completion = None; source = None; state = 'planned'
         if evidence:
             source = evidence['source']
-            completion = _number(evidence['content'].get('completion_percent'))
-            if actual_minutes is not None and workout.duration_min > 0:
-                completion = actual_minutes / workout.duration_min * 100
+            if actual_minutes is not None:
+                completion = finite_number(actual_minutes / workout.duration_min * 100, minimum=0)
+            if completion is not None:
                 adherence_values.append(max(0, 100 - abs(completion - 100)))
             modified = ((completion is not None and not math.isclose(completion, 100, abs_tol=0.01))
                         or evidence['content'].get('feeling') in ('harder', 'easier'))
             state = 'modified' if modified else 'completed'
         elif resolution and workout.date < str(today):
-            state = resolution.kind; source = 'explicit_resolution'
+            state = resolution.kind if resolution.kind in ('skipped', 'rest') else 'unconfirmed'; source = 'explicit_resolution' if state != 'unconfirmed' else None
             if state == 'skipped':
                 adherence_values.append(0)
         elif workout.status == 'skipped':
@@ -124,12 +127,14 @@ def week_progress(db, requested_start=None):
         counts[state] += 1
         sessions.append({'id': workout.id, 'date': workout.date,
                          'sport': SPORTS.get(sport_key(workout.sport), (workout.sport, ''))[0],
-                         'name': workout.name, 'status': state, 'planned_minutes': workout.duration_min,
+                         'name': workout.name, 'status': state, 'planned_minutes': finite_number(workout.duration_min, minimum=0),
                          'actual_minutes': round(actual_minutes, 1) if actual_minutes is not None else None,
                          'completion_percent': round(completion, 1) if completion is not None else None,
                          'evidence_source': source, 'activity_id': evidence['activity_id'] if evidence else None,
+                         'evidence_issue': checked['issue'] if feedback and not evidence and workout.date <= str(today) else None,
                          'resolution': resolution_dict(resolution),
-                         'can_resolve': state == 'unconfirmed' and resolution_block(db, workout) is None})
+                         'can_resolve': (state == 'unconfirmed' and workout.status == 'planned'
+                                         and feedback is None and workout.id not in evaluated and workout.id not in remote)})
     sports = []
     keys = list(SPORTS)
     keys.extend(sorted({sport_key(a.sport) for a in activities} - set(keys)))
@@ -139,9 +144,9 @@ def week_progress(db, requested_start=None):
         recorded = [row for row in activities if sport_key(row.sport) == key]
         confirmed = [row for row in selected if row['evidence_source'] in ('activity', 'self_reported')]
         sports.append({'sport': canonical, 'label': label,
-                       'planned_minutes': round(sum(row['planned_minutes'] for row in selected), 1),
+                       'planned_minutes': _total([row['planned_minutes'] for row in selected]),
                        'confirmed_actual_minutes': _total([row['actual_minutes'] for row in confirmed]),
-                       'recorded_minutes': _total([row.duration_seconds / 60 if row.duration_seconds is not None else None for row in recorded]),
+                       'recorded_minutes': _total([finite_number(row.duration_seconds, minimum=0) / 60 if finite_number(row.duration_seconds, minimum=0) is not None else None for row in recorded]),
                        'recorded_activities': len(recorded)})
     confirmed = [row for row in sessions if row['evidence_source'] in ('activity', 'self_reported')]
     unconfirmed = [row for row in sessions if row['status'] == 'unconfirmed']
@@ -155,9 +160,9 @@ def week_progress(db, requested_start=None):
     if not adherence_values:
         suggestions.append('L’aderenza sarà disponibile dopo un’esecuzione confermata o una seduta dichiarata saltata.')
     return {'start': str(monday), 'end': str(end), 'today': str(today), 'counts': counts,
-            'totals': {'planned_minutes': round(sum(row['planned_minutes'] for row in sessions), 1),
+            'totals': {'planned_minutes': _total([row['planned_minutes'] for row in sessions]),
                        'confirmed_actual_minutes': _total([row['actual_minutes'] for row in confirmed]),
-                       'recorded_minutes': _total([a.duration_seconds / 60 if a.duration_seconds is not None else None for a in activities]),
+                       'recorded_minutes': _total([finite_number(a.duration_seconds, minimum=0) / 60 if finite_number(a.duration_seconds, minimum=0) is not None else None for a in activities]),
                        'planned_sessions': len(sessions), 'recorded_activities': len(activities),
                        'confirmed_sessions': len(confirmed)},
             'adherence': {'percent': round(mean(adherence_values), 1) if adherence_values else None,
@@ -175,12 +180,12 @@ def recovery_progress(db, days=28):
     for kind in ('hrv_ms', 'resting_hr_bpm', 'sleep_hours'):
         spec = METRICS[kind]
         available = [point for point in points if point['kind'] == kind and start <= date.fromisoformat(point['date']) <= today]
-        latest = available[-1] if available else None
-        source = latest['source'] if latest else None
+        observed = available[-1] if available else None
+        usable = [point for point in available if usable_metric_value(kind, point['value']) is not None]
+        latest = usable[-1] if usable else None
+        source = (latest or observed)['source'] if latest or observed else None
         same_source = [point for point in points if point['kind'] == kind and point['source'] == source
-                       and isinstance(point['value'], (int, float)) and not isinstance(point['value'], bool)
-                       and math.isfinite(point['value'])
-                       and (kind == 'sleep_hours' or point['value'] > 0)]
+                       and usable_metric_value(kind, point['value']) is not None]
         recent_start = today - timedelta(days=6)
         recent = [point for point in same_source if recent_start <= date.fromisoformat(point['date']) <= today][-3:]
         # The reference precedes the recent period, so no observation votes in
@@ -204,6 +209,9 @@ def recovery_progress(db, days=28):
                        'current': round(current, 2) if current is not None else None,
                        'recent_delta': round(delta, 2) if delta is not None else None,
                        'status': status, 'stale': stale,
+                       'latest_observation_date': observed['date'] if observed else None,
+                       'latest_usable_date': latest['date'] if latest else None,
+                       'recent_dates': [point['date'] for point in recent],
                        'counts': {'baseline': len(baseline_points), 'recent': len(recent)},
                        'reference_range': reference_range(baseline_points, positive_only=kind in ('hrv_ms', 'resting_hr_bpm')),
                        'points': available, 'explanation': explanation})

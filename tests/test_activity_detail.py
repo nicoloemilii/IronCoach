@@ -248,3 +248,87 @@ def test_protected_client_uses_fixed_origin_auth_no_redirect_and_short_timeout(m
     assert calls[0][0] == 'https://intervals.icu/api/v1/activity/i123/streams.json'
     assert calls[0][1]['auth'] == ('API_KEY','private-test-key')
     assert calls[0][1]['allow_redirects'] is False and calls[0][1]['timeout'] == 12
+
+
+def test_detail_http_raw_comparison_is_read_only_and_uses_actual_paired_elapsed_signals(api):
+    from sqlalchemy import event
+    client, engine = api
+    times=list(range(0,1201,2))
+    streams=[{'type':'time','data':times},{'type':'watts','data':[100+t/6 for t in times]},
+             {'type':'heartrate','data':[130+t/60 for t in times]}]
+    with Session(engine) as db:
+        identifier=activity(db,payload={'elapsed_time':1200,'moving_time':1000,'streams':streams})
+        before=db.get(ActivityObservation,1).payload_json
+    statements=[]
+    def inspect(connection,cursor,statement,parameters,context,many): statements.append(statement.lstrip().split()[0].upper())
+    event.listen(engine,'before_cursor_execute',inspect)
+    try:
+        response=client.get(f'/activities/{identifier}/detail')
+    finally:
+        event.remove(engine,'before_cursor_execute',inspect)
+    assert response.status_code == 200
+    value=response.json();comparison=value['effort_comparison']
+    assert comparison['status']=='available'
+    assert comparison['window']['end_s']==1200 and value['summary']['duration_seconds']==1000
+    assert [half['power_mean_w'] for half in comparison['halves']]==[150,250]
+    assert comparison['source']=='stored_observation_streams'
+    assert not ({'UPDATE','DELETE','INSERT','REPLACE'} & set(statements))
+    with Session(engine) as db:
+        assert db.get(ActivityObservation,1).payload_json==before
+        assert db.get(Activity,identifier).duration_seconds==3600
+
+
+@pytest.mark.parametrize('payload', [
+    {'streams':[{'type':[],'data':[0]}, {'type':'time','data':[0,1]},{'type':'watts','data':[10**1000,100]}]},
+    {'streams':[{'type':'time','data':[0,10,10,20]}, {'type':'watts','data':[100]*4}, {'type':'heartrate','data':[140]*4}]},
+    {'streams':[{'type':'time','data':[0,1]}, {'type':'watts','data':[100,100]}, {'type':'watts','data':[999,999]}]},
+])
+def test_malformed_stream_http_keeps_summary_available_without_crashing(api,payload):
+    client,engine=api
+    with Session(engine) as db: identifier=activity(db,payload=payload)
+    response=client.get(f'/activities/{identifier}/detail')
+    assert response.status_code==200
+    value=response.json()
+    assert value['summary']['duration_seconds']==3600
+    assert value['effort_comparison']['change_pct'] is None
+    assert value['stream_quality']['valid_time_samples']>=0
+
+
+def test_detail_selects_the_retained_provider_identity_instead_of_the_latest_merged_alias(api):
+    client,engine=api
+    with Session(engine) as db:
+        identifier=activity(db,payload={'load':50,'avg_power':125})
+        db.add(ActivityObservation(activity_id=identifier,source_key='intervals:another-id',
+                                  payload_json=json.dumps({'load':999,'avg_power':999})))
+        db.commit()
+    value=client.get(f'/activities/{identifier}/detail').json()
+    assert value['summary']['load']==50 and value['summary']['avg_power']==125
+    assert value['provider_url'].endswith('/i12345')
+    assert value['availability']['source_resolution']['reason']=='canonical_identity'
+
+
+@pytest.mark.parametrize('loads', [(50,50),(50,999),(None,None)])
+def test_ambiguous_provider_identities_do_not_authorize_an_arbitrary_remote_fetch(api,monkeypatch,loads):
+    client,engine=api;calls=[]
+    monkeypatch.setattr(detail,'_cached_remote',lambda *args:calls.append(args))
+    with Session(engine) as db:
+        identifier=activity(db,source='fit',source_id='retained-fit')
+        for index,load in enumerate(loads):
+            db.add(ActivityObservation(activity_id=identifier,source_key=f'intervals:alias-{index}',
+                                      payload_json=json.dumps({'load':load,'avg_power':999})))
+        db.commit()
+    value=client.get(f'/activities/{identifier}/detail').json()
+    assert not calls and value['provider_url'] is None
+    assert value['summary']['avg_power']==150
+    assert value['summary']['load']==(loads[0] if loads[0]==loads[1] else None)
+    assert value['availability']['status']=='partial'
+    assert value['availability']['source_resolution']['ambiguous_identity']
+    assert 'arbitrariamente' in value['availability']['message']
+
+
+def test_missing_normalized_observation_load_does_not_revive_a_legacy_alias_or_canonical_value(api):
+    client,engine=api
+    with Session(engine) as db:
+        identifier=activity(db,payload={'load':None,'icu_training_load':900,'training_load':800},load=500)
+    value=client.get(f'/activities/{identifier}/detail').json()
+    assert value['summary']['load'] is None

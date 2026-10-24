@@ -8,10 +8,8 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
-import json
 import math
 
-from app.db.iron_models import ActivityObservation
 from app.db.models import Activity
 from app.db.repository import exact_duplicate_review, exact_duplicate_counts
 from app.services.athlete_clock import (
@@ -19,6 +17,7 @@ from app.services.athlete_clock import (
     day_start_utc, local_stamp_to_utc_naive, utc_now_naive,
 )
 from app.services.training_load import sport_key
+from app.services.observed_load import resolve_observed_loads, load_values
 
 
 VERSION = 'observed-training-patterns-1'
@@ -40,8 +39,6 @@ def _number(value):
 
 def _sport(value):
     key = sport_key(value)
-    if key in ('gym', 'weightlifting', 'workout'):
-        key = 'strength'
     return key if key in SPORT_LABELS else 'other'
 
 
@@ -85,27 +82,11 @@ def _totals(rows, loads):
 
 
 def _recorded_loads(db, rows, start_utc, end_utc, now):
-    """One bounded observation query; an Intervals null overrides an old value.
-
-    Never estimate a missing load from an unconfirmed/default FTP. Observations
-    are ordered so a duplicate legacy association has a deterministic winner.
-    """
-    loads = {row.id: _number(row.load) for row in rows}
-    if not rows:
-        return loads
-    observations = db.query(ActivityObservation.activity_id, ActivityObservation.payload_json).join(
-        Activity, Activity.id == ActivityObservation.activity_id,
-    ).filter(
-        Activity.start_time >= start_utc, Activity.start_time < end_utc,
-        Activity.start_time <= now, ActivityObservation.source_key.like('intervals:%'),
-    ).order_by(ActivityObservation.id.asc()).all()
-    for identifier, raw in observations:
-        if identifier not in loads:
-            continue
-        try:
-            loads[identifier] = _number(json.loads(raw).get('load'))
-        except (ValueError, TypeError, AttributeError):
-            loads[identifier] = None
+    """Resolve the same provider identity used by diary, profile and ratings."""
+    eligible = [row for row in rows if start_utc <= as_utc_naive(row.start_time) < end_utc
+                and as_utc_naive(row.start_time) <= now]
+    loads = {row.id: None for row in rows}
+    loads.update(load_values(resolve_observed_loads(db, eligible)))
     return loads
 
 

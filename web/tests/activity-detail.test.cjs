@@ -39,7 +39,7 @@ async function setup(t,customFetch){
   const marker="page(location.hash.slice(1) || 'today'); action(load);";
   assert.ok(script.includes(marker),'The fixture must disable only the automatic initial dashboard load.');
   const focused=script.replace(marker,"page(location.hash.slice(1) || 'today');")+'\nwindow.__activityFixture={showActivity,state};';
-  w.eval(fs.readFileSync(path.join(__dirname,'../charts.js'),'utf8'));w.eval(fs.readFileSync(path.join(__dirname,'../charts.js'),'utf8'));w.eval(colors);w.eval(focused);
+  w.eval(fs.readFileSync(path.join(__dirname,'../charts.js'),'utf8'));w.eval(fs.readFileSync(path.join(__dirname,'../power-duration.js'),'utf8'));w.eval(fs.readFileSync(path.join(__dirname,'../distance-efforts.js'),'utf8'));w.eval(colors);w.eval(focused);
   t.after(()=>dom.window.close());
   const flush=async()=>{for(let index=0;index<8;index++)await new Promise(resolve=>setImmediate(resolve));assert.equal(errors.length,0,errors.map(error=>error.stack||error.message).join('\n'));};
   const open=async(row=activity())=>{await w.__activityFixture.showActivity(row);await flush();};
@@ -130,4 +130,52 @@ test('activity titles are inert text and the back arrow closes the activity view
   assert.match($('#activity-detail').textContent,/<img/);
   assert.match($('#close-activity').getAttribute('aria-label'),/Torna/);
   $('#close-activity').click();assert.equal($('#activity-dialog').open,false);
+});
+
+test('selecting a best-power duration opens its actual power interval without changing full-activity statistics',async t=>{
+  const {w,$,data,open,flush}=await setup(t);
+  data.detail.streams.reverse();
+  data.detail.best_efforts={status:'available',metric:'power',unit:'W',source:'stored_observation_streams',
+    coverage:{covered_seconds:120,window_seconds:120,coverage_pct:100,segments_count:1,longest_segment_seconds:120},
+    durations:[{duration_seconds:5,status:'available',mean_power_w:90,start_s:2,end_s:7,coverage_pct:100,covered_seconds:5}],
+    method:{gap_limit_seconds:10},reasons:[],limits:[]};
+  await open();assert.equal($('[name=activity_stream]').value,'heart_rate');assert.equal($('.selected-effort-window'),null);
+  $('.power-duration-choice[data-duration-seconds="5"]').click();await flush();
+  assert.equal($('[name=activity_stream]').value,'power');assert.ok($('.selected-effort-window'));assert.match($('.chart-interval-info').textContent,/0:02.*0:07/);
+  const summary=$('.stream-stats').textContent;
+  const select=$('[name=activity_stream]');select.value='heart_rate';select.dispatchEvent(new w.Event('change'));select.value='power';select.dispatchEvent(new w.Event('change'));
+  assert.ok($('.selected-effort-window'));assert.equal($('.stream-stats').textContent,summary);
+  $('#close-activity').click();data.detail.activity_id=92;data.detail.name='Altra attività';data.detail.best_efforts.durations[0].start_s=10;data.detail.best_efforts.durations[0].end_s=15;
+  await open(activity(92,'Altra attività'));assert.equal($('.selected-effort-window'),null);assert.equal($('[name=activity_stream]').value,'heart_rate');
+});
+
+test('an unavailable raw power curve explains its reason even when no chart can be drawn',async t=>{
+  const {$,data,open}=await setup(t);data.detail.streams=[];data.detail.route=null;
+  data.detail.best_efforts={status:'unavailable',metric:'power',unit:'W',reasons:['ambiguous_power'],durations:[],coverage:{},method:{}};
+  await open();assert.ok($('.power-duration'));assert.match($('.power-duration-unavailable').textContent,/ambigue/);assert.equal($('.selected-effort-window'),null);
+});
+
+const distanceResult=()=>({status:'available',metric:'running_distance',source:'stored_observation_streams',distances:[{distance_m:1000,distance_value:1000,distance_unit:'m',status:'available',elapsed_seconds:250,start_s:10,end_s:260}],coverage:{covered_seconds:600,window_seconds:600,coverage_pct:100,segments_count:1,longest_segment_m:2400},method:{gap_limit_seconds:10},reasons:[],limits:[]});
+
+for(const kind of ['distance','pace','speed'])test(`distance result selects the recorded ${kind} interval only after a click`,async t=>{
+  const {w,$,data,open,calls}=await setup(t);data.detail.sport='running';data.detail.distance_efforts=distanceResult();
+  data.detail.streams=[data.detail.streams[1],{kind,label:kind,unit:kind==='distance'?'m':kind==='pace'?'s/km':'m/s',points:[{time_s:0,value:0},{time_s:300,value:1200},{time_s:600,value:2400}]}];
+  await open();assert.equal($('[name=activity_stream]').value,'heart_rate');assert.equal($('.selected-effort-window'),null);
+  const original=JSON.stringify(data.detail),summary=$('.activity-stat-grid').textContent,requests=calls.length;
+  $('.distance-efforts-choice').click();assert.equal($('[name=activity_stream]').value,kind);assert.ok($('.selected-effort-window'));assert.match($('.chart-interval-info').textContent,/1.000 m.*0:10.*4:20/);
+  const select=$('[name=activity_stream]');select.value='heart_rate';select.dispatchEvent(new w.Event('change'));select.value=kind;select.dispatchEvent(new w.Event('change'));assert.ok($('.selected-effort-window'));
+  assert.equal($('.activity-stat-grid').textContent,summary);assert.equal(JSON.stringify(data.detail),original);assert.equal(calls.length,requests);
+  $('#close-activity').click();data.detail.activity_id=92;await open(activity(92,'Seconda corsa'));assert.equal($('.selected-effort-window'),null);
+});
+
+test('pool FIT results render without chart streams and never promise a missing chart highlight',async t=>{
+  const {$,data,open,calls}=await setup(t);data.detail.sport='swimming';data.detail.streams=[];data.detail.pool_efforts={status:'available',metric:'pool_distance',source:'stored_fit_lengths',method:{pauses:'split'},groups:[{pool_length_m:25,stroke:'freestyle',distances:[{distance_m:100,distance_value:100,distance_unit:'m',status:'available',elapsed_seconds:95,start_s:20,end_s:115}]}]};
+  await open();const root=$('.distance-efforts');assert.equal(root.dataset.metric,'pool_distance');assert.match(root.textContent,/vasche intere consecutive.*senza pause registrate/s);assert.doesNotMatch(root.textContent,/pause comprese|evidenziare il suo intervallo/);assert.equal($('.activity-stream-chart'),null);
+  const requests=calls.length;root.querySelector('button').click();assert.match($('.distance-efforts-readout').textContent,/100 m · 1:35.*0:20 — 1:55/);assert.equal(calls.length,requests);
+  assert.equal($('#close-activity').parentElement.firstElementChild,$('#close-activity'));
+});
+
+test('missing distance source stays explicit next to unrelated recorded series',async t=>{
+  const {$,data,open}=await setup(t);data.detail.sport='running';data.detail.streams=[data.detail.streams[1]];data.detail.distance_efforts={status:'unavailable',metric:'running_distance',source:null,reasons:['missing_distance'],distances:[],coverage:{}};
+  await open();assert.match($('.distance-efforts-unavailable').textContent,/Manca una serie di distanza cumulativa/);assert.equal($('.distance-efforts svg'),null);assert.equal($('.distance-efforts button'),null);assert.equal($('[name=activity_stream]').value,'heart_rate');
 });

@@ -9,17 +9,25 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from app.api import routes_iron
+from app.api import routes_iron, routes_duplicate_review
 from app.db.database import Base, get_db
 from app.db.experience_models import ActivityIdentity, SessionFeedback
 from app.db.iron_models import ActivityObservation, DuplicateCandidate, HealthMetric, RaceGoal
 from app.db.models import Activity, DailyMetrics, Workout, WorkoutEvaluation
+from app.db import planning_models  # Register settings before isolated create_all.
 from app.db.repository import save_activity
 from app.integrations import strava
 from app.services import health, iron_coach, race_gap
 
 TODAY = date(2026, 10, 17)
 NOW = datetime(2026, 10, 17, 10)
+
+
+def _merge_with_preview(client, path):
+    preview = client.get(path.rsplit('/', 1)[0] + '/preview')
+    if preview.status_code != 200:
+        return preview
+    return client.post(path, json={'state_token': preview.json()['state_token']})
 
 
 @pytest.fixture
@@ -31,6 +39,7 @@ def api(monkeypatch):
         monkeypatch.setattr(module, 'athlete_today', lambda: TODAY)
         monkeypatch.setattr(module, 'utc_now_naive', lambda: NOW)
     application = FastAPI()
+    application.include_router(routes_duplicate_review.router)
     application.include_router(routes_iron.router)
 
     def isolated_db():
@@ -219,7 +228,7 @@ def test_merge_preserves_third_activity_comparisons_and_nested_references(api):
         decision = db.query(DuplicateCandidate).filter_by(activity_id=third.id, other_id=remove.id).one()
         decision.status = 'kept'
         db.commit()
-    assert client.post(f'/activities/duplicates/{identifier}/merge').status_code == 200
+    assert _merge_with_preview(client, f'/activities/duplicates/{identifier}/merge').status_code == 200
     with Session(engine) as db:
         assert db.get(Activity, remove_id) is None
         relations = db.query(DuplicateCandidate).all()
@@ -243,8 +252,94 @@ def test_merge_retains_identity_of_legacy_activity(api):
         db.add(candidate)
         db.commit()
         identifier = candidate.id
-    assert client.post(f'/activities/duplicates/{identifier}/merge').status_code == 200
+    assert _merge_with_preview(client, f'/activities/duplicates/{identifier}/merge').status_code == 200
     with Session(engine) as db:
         assert db.query(ActivityIdentity).filter_by(source_key='intervals:legacy').one().activity_id == keep_id
         assert save_activity(db, data('intervals', 'legacy')).id == keep_id
         assert db.query(Activity).count() == 1
+
+
+@pytest.mark.parametrize('second_source', ['intervals', 'fit'])
+def test_chained_merge_retains_original_legacy_identity_with_other_aliases(api, second_source):
+    client, engine = api
+    with Session(engine) as db:
+        legacy = Activity(**data(identifier='legacy-original'))
+        db.add(legacy)
+        db.commit()
+        legacy_id = legacy.id
+        remote = save_activity(db, data(second_source, 'remote-two'))
+        first = db.query(DuplicateCandidate).filter_by(activity_id=remote.id, other_id=legacy_id).first()
+        if not first:
+            first = DuplicateCandidate(activity_id=remote.id, other_id=legacy_id)
+            db.add(first)
+            db.commit()
+        first_id = first.id
+    assert _merge_with_preview(client, f'/activities/duplicates/{first_id}/merge').status_code == 200
+    with Session(engine) as db:
+        # The legacy row retained above has another alias, but originally
+        # predates the source identity table. It may be removed by a later review.
+        assert db.query(ActivityIdentity).filter_by(source_key='fit:legacy-original').first() is None
+        third = save_activity(db, data('strava', 'remote-three'))
+        third_id = third.id
+        second = db.query(DuplicateCandidate).filter_by(activity_id=third_id, other_id=legacy_id).one()
+        second.activity_id, second.other_id = legacy_id, third_id
+        db.commit()
+        second_id = second.id
+        observation_payloads = {row.source_key: row.payload_json for row in db.query(ActivityObservation)}
+    assert _merge_with_preview(client, f'/activities/duplicates/{second_id}/merge').status_code == 200
+    with Session(engine) as db:
+        assert db.query(ActivityIdentity).filter_by(source_key='fit:legacy-original').one().activity_id == third_id
+        assert {row.activity_id for row in db.query(ActivityIdentity)} == {third_id}
+        assert {row.source_key: row.payload_json for row in db.query(ActivityObservation)} == observation_payloads
+        assert {row.activity_id for row in db.query(ActivityObservation)} == {third_id}
+        for source, identifier in [('fit', 'legacy-original'), (second_source, 'remote-two'), ('strava', 'remote-three')]:
+            assert save_activity(db, data(source, identifier)).id == third_id
+        assert db.query(Activity).count() == 1
+
+
+def test_merge_checks_original_identity_collision_even_with_other_aliases(api):
+    client, engine = api
+    with Session(engine) as db:
+        keep = Activity(**data(identifier='keep'))
+        remove = Activity(**data('intervals', 'original'))
+        unrelated = Activity(**data('strava', 'unrelated'))
+        db.add_all([keep, remove, unrelated])
+        db.flush()
+        db.add_all([
+            ActivityIdentity(source_key='fit:older-alias', activity_id=remove.id),
+            ActivityIdentity(source_key='intervals:original', activity_id=unrelated.id),
+        ])
+        candidate = DuplicateCandidate(activity_id=remove.id, other_id=keep.id)
+        db.add(candidate)
+        db.commit()
+        identifier = candidate.id
+        before = [(row.source_key, row.activity_id) for row in db.query(ActivityIdentity).order_by(ActivityIdentity.id)]
+    response = _merge_with_preview(client, f'/activities/duplicates/{identifier}/merge')
+    assert response.status_code == 409
+    with Session(engine) as db:
+        assert db.query(Activity).count() == 3
+        assert [(row.source_key, row.activity_id) for row in db.query(ActivityIdentity).order_by(ActivityIdentity.id)] == before
+        assert db.get(DuplicateCandidate, identifier).status == 'pending'
+
+
+@pytest.mark.parametrize('occupied_namespace', [False, True])
+def test_merge_does_not_turn_internal_namespaced_id_into_provider_identity(api, occupied_namespace):
+    client, engine = api
+    with Session(engine) as db:
+        keep = save_activity(db, data(identifier='same-id'))
+        keep_id = keep.id
+        if occupied_namespace:
+            save_activity(db, data('strava', 'intervals:same-id', start_time=NOW - timedelta(days=10)))
+        remove = save_activity(db, data('intervals', 'same-id'))
+        assert remove.source_id == ('intervals:same-id:1' if occupied_namespace else 'intervals:same-id')
+        # Refresh replaces the observation with the original provider ID.
+        assert save_activity(db, data('intervals', 'same-id')).id == remove.id
+        candidate = db.query(DuplicateCandidate).filter_by(activity_id=remove.id, other_id=keep_id).one()
+        identifier = candidate.id
+    assert _merge_with_preview(client, f'/activities/duplicates/{identifier}/merge').status_code == 200
+    with Session(engine) as db:
+        assert save_activity(db, data('intervals', 'same-id')).id == keep_id
+        assert db.query(ActivityIdentity).filter_by(source_key='intervals:intervals:same-id').first() is None
+        distinct = save_activity(db, data('intervals', 'intervals:same-id', start_time=NOW - timedelta(days=7)))
+        assert distinct.id != keep_id
+        assert db.query(Activity).count() == (3 if occupied_namespace else 2)

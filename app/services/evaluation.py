@@ -1,142 +1,53 @@
-﻿from __future__ import annotations
+"""Descriptive execution comparison; absent values never become zero or RPE 4."""
+from __future__ import annotations
+
 from statistics import mean
+
+from app.services.execution_evidence import finite_number, safe_object
 
 
 def evaluate_workout(planned: dict, actual: dict) -> dict:
+    planned = safe_object(planned) or {}
+    actual = safe_object(actual) or {}
+    pd = finite_number(planned.get('duration_min'), minimum=0)
+    ad = finite_number(actual.get('duration_min'), minimum=0)
+    completion = None if pd is None or pd <= 0 or ad is None else min(100., ad / pd * 100.)
 
-    pd = float(
-        planned.get("duration_min") or 0
-    )
-
-    ad = float(
-        actual.get("duration_min") or 0
-    )
-
-    completion = (
-        100.0
-        if pd <= 0
-        else max(
-            0.0,
-            min(
-                100.0,
-                ad / pd * 100.0
-            )
-        )
-    )
-
-    targets = []
-    values = []
-
-    for p, a in zip(
-        planned.get("steps", []),
-        actual.get("steps", [])
-    ):
-
-        target = p.get("target_power_w")
-        value = a.get("avg_power_w")
-
-        if target is not None and value is not None:
-            target = float(target)
-            value = float(value)
-
-            if target > 0:
-                targets.append(target)
-                values.append(value)
-
-    if targets:
-        power_errors = [
-            abs(v - t) / t * 100.0
-            for t, v in zip(targets, values)
-        ]
-
-        power_error = mean(power_errors)
-
-        intensity_control = max(
-            0.0,
-            min(
-                100.0,
-                100.0 - power_error * 3.0
-            )
-        )
+    errors = []
+    planned_steps = planned.get('steps')
+    actual_steps = actual.get('steps')
+    if isinstance(planned_steps, list) and isinstance(actual_steps, list):
+        for p, a in zip(planned_steps, actual_steps):
+            if not isinstance(p, dict) or not isinstance(a, dict):
+                continue
+            target = finite_number(p.get('target_power_w'), minimum=0)
+            value = finite_number(a.get('avg_power_w'), minimum=0)
+            if target is not None and target > 0 and value is not None:
+                error = finite_number(abs(value - target) / target * 100., minimum=0)
+                if error is not None:
+                    errors.append(error)
+    # Average after scaling keeps valid extreme finite inputs from overflowing.
+    power_error = sum(value / len(errors) for value in errors) if errors else None
+    intensity = max(0., 100. - power_error * 3.) if power_error is not None else None
+    rpe = finite_number(actual.get('rpe'), minimum=1, maximum=10)
+    expected = finite_number(planned.get('expected_rpe'), minimum=1, maximum=10)
+    rpe_score = None if rpe is None or expected is None else max(0., 100. - abs(rpe - expected) * 15.)
+    components = [value for value in (completion, intensity, rpe_score) if value is not None]
+    overall = round(mean(components), 1) if completion is not None else None
+    if rpe is not None and rpe >= 8 and completion is not None and completion >= 80:
+        adaptation = 'reduce_next_similar'
+    elif rpe is not None and rpe <= 3 and completion is not None and completion >= 95:
+        adaptation = 'consider_progression'
+    elif power_error is not None and power_error > 8:
+        adaptation = 'recalibrate_targets'
     else:
-        power_error = None
-        intensity_control = None
-
-    rpe = actual.get("rpe")
-
-    expected = float(
-        planned.get("expected_rpe") or 4
-    )
-
-    rpe_score = (
-        None
-        if rpe is None
-        else max(
-            0.0,
-            min(
-                100.0,
-                100.0
-                - abs(float(rpe) - expected) * 15.0
-            )
-        )
-    )
-
-    scores = [
-        x
-        for x in (
-            completion,
-            intensity_control,
-            rpe_score,
-        )
-        if x is not None
-    ]
-
-    overall = (
-        round(mean(scores), 1)
-        if scores
-        else None
-    )
-
-    if rpe is not None and float(rpe) >= 8 and completion >= 80:
-        adaptation = "reduce_next_similar"
-
-    elif (
-        rpe is not None
-        and float(rpe) <= 3
-        and completion >= 95
-    ):
-        adaptation = "consider_progression"
-
-    elif (
-        power_error is not None
-        and power_error > 8
-    ):
-        adaptation = "recalibrate_targets"
-
-    else:
-        adaptation = "hold"
-
+        adaptation = 'hold'
     return {
-        "completion": round(completion, 1),
-        "intensity_control": (
-            None
-            if intensity_control is None
-            else round(intensity_control, 1)
-        ),
-        "rpe_score": (
-            None
-            if rpe_score is None
-            else round(rpe_score, 1)
-        ),
-        "overall": overall,
-        "power_error_pct": (
-            None
-            if power_error is None
-            else round(power_error, 1)
-        ),
-        "adaptation": adaptation,
-        "note": (
-            "Una singola seduta genera un segnale; "
-            "la modifica persistente richiede un trend ripetuto."
-        ),
+        'completion': round(completion, 1) if completion is not None else None,
+        'intensity_control': round(intensity, 1) if intensity is not None else None,
+        'rpe_score': round(rpe_score, 1) if rpe_score is not None else None,
+        'overall': overall,
+        'power_error_pct': round(power_error, 1) if power_error is not None else None,
+        'adaptation': adaptation,
+        'note': 'Una singola seduta genera un segnale; la modifica persistente richiede un trend ripetuto.',
     }

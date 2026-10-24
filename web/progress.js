@@ -8,28 +8,43 @@
   const json = (method, value) => ({method, body:JSON.stringify(value)});
   const labels = {cycling:'Bici',running:'Corsa',swimming:'Nuoto',strength:'Forza',bike:'Bici',run:'Corsa',swim:'Nuoto'};
   const review = el('article', null, 'card progress-card'); review.id = 'week-reflection';
-  review.append(el('p', 'DAL PROGRAMMA AL LAVORO SVOLTO', 'eyebrow'), el('h2', 'Rivedi la tua settimana'));
+  const reviewDetails = el('details', null, 'week-reflection-details');
+  const reviewSummary = el('summary'); reviewSummary.append(el('strong', 'Rivedi la tua settimana'));
+  const reviewCounts = el('span', 'Carica le conferme delle sedute.', 'caption'); reviewCounts.id = 'reflection-summary'; reviewCounts.setAttribute('role', 'status'); reviewSummary.append(reviewCounts);
+  reviewDetails.append(reviewSummary); review.append(reviewDetails);
   const controls = el('div', null, 'action-group'); const dateLabel = el('label', 'Un giorno della settimana');
   const weekDate = el('input'); weekDate.type = 'date'; weekDate.value = ui.context().weekStart; weekDate.id = 'reflection-date'; dateLabel.append(weekDate);
-  controls.append(dateLabel, button('Carica settimana', () => action(() => loadReview(weekDate.value)))); review.append(controls);
-  const reviewBody = el('div', 'Apri Coach per rivedere le sedute e confermare quelle dei giorni passati.'); reviewBody.id = 'reflection-content'; review.append(reviewBody);
-  review.hidden=true; // Review of unresolved calendar entries is available through calendar controls.
+  controls.append(dateLabel, button('Carica settimana', () => action(() => loadReview(weekDate.value)))); reviewDetails.append(controls);
+  const reviewBody = el('div', 'Apri la revisione per confermare le sedute dei giorni passati.'); reviewBody.id = 'reflection-content'; reviewDetails.append(reviewBody);
+  const calendar = document.getElementById('calendar');
+  const calendarPanel = document.getElementById('plan-calendar-panel');
+  if (calendarPanel) calendarPanel.after(review); else calendar.append(review);
   const recovery = el('article', null, 'card progress-card'); recovery.id = 'personal-recovery'; recovery.append(el('p', 'IL TUO RIFERIMENTO PERSONALE', 'eyebrow'), el('h2', 'Come cambia il recupero'));
   const recoveryBody = el('div', 'Apri Salute per confrontare le osservazioni recenti con il tuo storico.'); recoveryBody.id = 'recovery-trends'; recovery.append(recoveryBody);
   document.getElementById('health').prepend(recovery);
   const goalContext = el('article', null, 'card progress-card'); goalContext.id = 'active-race-context'; goalContext.hidden = true; document.getElementById('calendar').prepend(goalContext);
   let reviewVersion = 0; let recoveryVersion = 0; let contextVersion = 0;
+  let contextWeek = ui.context().weekStart; let reviewStart = contextWeek;
+  const onCalendar = () => document.querySelector('.page:not([hidden])')?.id === 'calendar';
+  weekDate.addEventListener('change', () => {
+    ++reviewVersion; reviewStart = weekDate.value; reviewBody.removeAttribute('aria-busy');
+    reviewCounts.textContent = 'Periodo da caricare'; reviewBody.replaceChildren(el('p', 'Premi Carica settimana per leggere le conferme di questo periodo.', 'caption'));
+  });
 
   function errorView(root, message, retry) {
     root.replaceChildren(el('p', message, 'muted'), button('Riprova', () => action(retry)));
   }
   async function loadReview(start) {
-    if (!start) return;
+    if (!start || !onCalendar()) return;
+    reviewStart = start;
     const version = ++reviewVersion; reviewBody.setAttribute('aria-busy','true');
     try {
       const value = await api(`/progress/week?start=${encodeURIComponent(start)}`);
-      if (version !== reviewVersion) return;
+      if (version !== reviewVersion || !onCalendar()) return;
       weekDate.value = value.start;
+      const unconfirmed = value.counts?.unconfirmed || 0;
+      const confirmed = (value.counts?.completed || 0) + (value.counts?.modified || 0);
+      reviewCounts.textContent = `${value.start} — ${value.end} · ${number(confirmed)} ${confirmed === 1 ? 'esecuzione confermata' : 'esecuzioni confermate'} · ${number(unconfirmed)} ${unconfirmed === 1 ? 'seduta da confermare' : 'sedute da confermare'}`;
       reviewBody.replaceChildren(el('p', `${value.start} — ${value.end}`, 'caption'), el('p', value.review));
       const totals = el('div', null, 'metrics');
       for (const [label, amount] of [['Minuti programmati',value.totals.planned_minutes],['Minuti confermati',value.totals.confirmed_actual_minutes],['Sedute da chiarire',value.counts.unconfirmed]]) {
@@ -50,11 +65,15 @@
         if (session.can_resolve) {
           const reasonLabel = el('label','Motivo o nota (facoltativo)'); const reason = el('input'); reason.type='text'; reason.maxLength=1000; reasonLabel.append(reason); row.append(reasonLabel);
           const actions = el('div',null,'action-group');
+          actions.append(button('Apri seduta e conferma', () => action(() => ui.openWorkoutFromReview(session.id)), 'primary'));
           for (const [kind,text] of [['skipped','Non svolta'],['rest','Ho scelto il riposo']]) actions.append(button(text, () => action(async () => {
             await api(`/progress/workouts/${session.id}/resolution`,json('PUT',{status:kind,reason:reason.value.trim() || (kind === 'rest' ? 'Riposo scelto dall’atleta.' : 'Seduta non svolta, confermata dall’atleta.')}));
             await ui.load(); await loadReview(value.start);
           })));
-          row.append(actions,el('p','Se ti sei allenato, apri la seduta dal piano e registra il feedback o abbina l’attività.', 'caption'));
+          row.append(actions,el('p','Se ti sei allenato, apri la seduta: puoi scegliere un’attività registrata oppure confermare con un feedback manuale.', 'caption'));
+        } else if (session.status === 'unconfirmed') {
+          row.append(button('Apri seduta e conferma', () => action(() => ui.openWorkoutFromReview(session.id)), 'primary'),
+            el('p','Il feedback precedente non conferma l’esecuzione. Apri la seduta e controlla l’attività associata o il feedback manuale.', 'caption'));
         } else if (session.resolution) {
           if (session.resolution.reason) row.append(el('p',session.resolution.reason,'caption'));
           row.append(button('Annulla questa conferma', () => action(async () => {
@@ -65,7 +84,7 @@
       }
       if (!(value.sessions || []).length) list.append(el('p','Nessuna seduta programmata in questa settimana. Le attività registrate restano nel diario.', 'empty-state'));
       reviewBody.append(list,button('Apri il calendario',()=>ui.navigate('calendar')));
-    } catch (error) { if (version === reviewVersion) errorView(reviewBody,'La revisione settimanale non è disponibile. I dati del piano restano conservati.',()=>loadReview(start)); }
+    } catch (error) { if (version === reviewVersion && onCalendar()) { reviewCounts.textContent = 'Conferme non disponibili · riprova'; errorView(reviewBody,'La revisione settimanale non è disponibile. I dati del piano restano conservati.',()=>loadReview(start)); } }
     finally { if (version === reviewVersion) reviewBody.removeAttribute('aria-busy'); }
   }
   async function loadRecovery() {
@@ -78,9 +97,15 @@
         card.classList.add('clickable-card');
         card.append(el('h3',metric.label),el('strong',`${number(metric.current,1)} ${metric.unit}`));
         card.append(el('p',metric.counts?.recent >= 3 ? 'Mediana delle ultime 3 letture · stessa fonte' : 'Servono 3 letture recenti per il confronto','caption'));
-        if(metric.points?.length)card.append(ui.sparkline(metric,true));
+        const latest=(metric.points||[]).find(point=>point.date===metric.latest_usable_date && point.source===metric.source) || null;
+        const source=ui.sourceLabel?.(metric.source) || metric.source || 'Fonte non disponibile';
+        if(latest)card.append(el('p',`Ultima misura utilizzabile: ${latest.date} · ${source}`,'caption'));
+        else if(metric.latest_observation_date)card.append(el('p','Nessuna misura utilizzabile per il confronto. Le osservazioni originali restano nel grafico.','caption'));
+        if(metric.latest_observation_date && (!latest || metric.latest_observation_date>latest.date))card.append(el('p',`Osservazione del ${metric.latest_observation_date} esclusa dal calcolo: non aggiorna il trend.`,'caption'));
+        if(metric.points?.length)card.append(ui.sparkline({...metric,latest},true));
         if(colors)colors.apply(card,colors.trend(metric),false);
-        const open=button('Analisi e andamento ↗',()=>ui.openHealthMetric({...metric,latest:metric.points?.at(-1),baseline:metric.baseline}),'metric-open');open.setAttribute('aria-label',`Apri ${metric.label}`);card.append(open);
+        const recovery_trend={current:metric.current,baseline:metric.baseline,counts:metric.counts,recent_dates:metric.recent_dates,source:metric.source,stale:metric.stale,explanation:metric.explanation};
+        const open=button('Analisi e andamento ↗',()=>ui.openHealthMetric({...metric,latest,recovery_trend}),'metric-open');open.setAttribute('aria-label',`Apri ${metric.label}`);card.append(open);
         if(!metric.counts || metric.counts.recent<3 || metric.counts.baseline<7)card.append(el('p','Storico insufficiente per il confronto personale.','caption'));
         grid.append(card);
       }
@@ -189,10 +214,17 @@
 
   function refreshVisible() {
     attachPreparationButtons();const page=document.querySelector('.page:not([hidden])')?.id;
-
-    if(page==='health')loadRecovery();if(page==='calendar')loadGoalContext();
+    if(page!=='calendar') { ++reviewVersion; reviewBody.removeAttribute('aria-busy'); }
+    if(page==='health')loadRecovery();if(page==='calendar') {
+      const start = ui.context().weekStart;
+      if (start !== contextWeek) { contextWeek = start; reviewStart = start; weekDate.value = start; }
+      loadGoalContext(); loadReview(reviewStart);
+    }
   }
   document.addEventListener('iron:loaded',refreshVisible);document.addEventListener('iron:pagechange',refreshVisible);
-  document.addEventListener('iron:weekchange',()=>{if(document.querySelector('.page:not([hidden])')?.id==='calendar')loadGoalContext();});
+  document.addEventListener('iron:weekchange',()=>{
+    contextWeek = ui.context().weekStart; reviewStart = contextWeek; weekDate.value = contextWeek; ++reviewVersion;
+    if(onCalendar()) { loadGoalContext(); loadReview(contextWeek); }
+  });
   refreshVisible();
 })();
